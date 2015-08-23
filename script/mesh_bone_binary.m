@@ -2,11 +2,11 @@ clear all; close all; clc;
 
 %% PATHS
 i2m_path = '/Users/gustavo/Programs/iso2mesh';
-addpath( genpath(i2m_path), fullfile(pwd,'../lib'));
-
 img_dir = fullfile(pwd,'../img');
 save_dir = fullfile(pwd,'../save');
 feb_dir = fullfile(pwd,'../febio');
+
+addpath( genpath(i2m_path), fullfile(pwd,'../lib'), genpath(img_dir));
 
 %% IMAGE DIRECTORY
 
