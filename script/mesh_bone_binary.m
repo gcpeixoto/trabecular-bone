@@ -8,6 +8,10 @@ feb_dir = fullfile(pwd,'../febio');
 
 addpath( genpath(i2m_path), fullfile(pwd,'../lib'), genpath(img_dir));
 
+% deletes old files
+delete( fullfile(feb_dir,'/*.*') );
+delete( fullfile(feb_dir,'/sim/*.*') );
+
 %% IMAGE DIRECTORY
 
 fmt = 'jpg';
@@ -27,7 +31,7 @@ modelName=fullfile(feb_dir,'boneCompression');
 %% PARAMETER SETTINGS
 
 iter = 10; % number of iterations for mesh smoothing operation
-nimg = 80; % number of images to parse
+nimg = 40; % number of images to parse
 maxgap = 10; % maximum gap size for image fill holes 
 
 % image smoothing
@@ -44,12 +48,78 @@ top_tol = 1e-1;
 bot_tol = 1e-1;
 dpx = 0.0;
 dpy = 0.0;
-dpz = -1.5;
+dpz = 0.0;
 
 % plotting
 viewAz = 65;
 vieEl = 25;
 plt = 'y'; % 'n' plot bone structure?
+
+%% FEBIO STRUCTURE CONTROL SETTINGS
+
+% * When max_ups is set to 0, FEBio will use the Full-Newton method 
+% instead of the BFGS method. In other words, the stiffness matrix 
+% is reformed for every iteration. In this case it is recommended 
+% to increase the number of max_refs (to e.g. 50), since the default 
+% value might cause FEBio to terminate prematurely when convergence 
+% is slow.
+%
+% * The lstol parameter controls the scaling of the vector direction 
+% obtained from the line search. A line search method is used to 
+% improve the convergence of the nonlinear (quasi-) Newton solution 
+% algorithm. After each BFGS or Newton iteration, this algorithm 
+% searches in the direction of the displacement increment for a solution 
+% that has less energy (that is, residual multiplied with the displacement 
+% increment) than the previous iteration.
+%
+% See Section 3.5.1 of Febio Manual for default values
+
+ntime = 50; % number of iterations 
+dt = 0.05; % time step
+max_refs = 25; % max number of stiffness reformations (recalculation and factorization)
+max_ups = 0; % max number of BFGS stiffness updates;
+dtol = 0.001; % convergence tolerance on displacements
+etol = 0.01; % convergence tolerance on energy
+rtol = 0; % convergence tolerance on residual 
+lstol = 0.9; % convergence tolerance on line search
+
+% time step props
+dtmin = 1e-4; % minimum time step size
+dtmax = 0.05; % maximum time step size
+max_re = 5; % max number of retries allowed per time step
+opt_iter = 10; % optimal number of iterations
+aggr = 1; % aggressiveness (?)
+
+% material choice
+%mat = 'rigid body';
+%mat = 'Mooney-Rivlin';
+mat = 'neo-Hookean';
+
+if strcmp(mat,'Mooney-Rivlin');
+    fprintf('Running for material: Mooney-Rivlin.\n');
+    c1 = 1e-3; % coefficient of first invariant term
+    c2 = 0; % coefficient of second invariant term
+    k = c1*1e3; % bulk modulus
+
+elseif strcmp(mat,'neo-Hookean');
+    fprintf('Running for material: neo-Hookean.\n');
+    E = 1000.0; % Young modulus
+    nu = 0.3; % Poisson' ratio
+
+elseif strcmp(mat,'rigid body');
+    fprintf('Running for material: rigid body.\n');        
+    % If the center_of_mass parameter is 
+    % omitted, FEBio will calculate the center of mass automatically. 
+    % In this case, a density must be specified. If the center_of_mass 
+    % is defined the density parameter may be omitted. 
+    % Omitting both will generate an error message.
+    rho = 1030;     
+    E = 1000.0; % Young modulus
+    nu = 0.3; % Poisson' ratio    
+else
+    error('Model of material not specified. Stopping...');
+end
+
 
 %% IMAGE PROCESSING
 
@@ -146,29 +216,44 @@ FEB_struct.Geometry.ElementMat={febMatID};
 FEB_struct.Geometry.ElementsPartName={'Trabeculae'};
 
 % DEFINING MATERIALS
-c1=1e-3;
-k=c1*1e3;
-FEB_struct.Materials{1}.Type='Mooney-Rivlin';
-FEB_struct.Materials{1}.Name='cube_mat';
-FEB_struct.Materials{1}.Properties={'c1','c2','k'};
-FEB_struct.Materials{1}.Values={c1,0,k};
+if strcmp(mat,'Mooney-Rivlin')
+    FEB_struct.Materials{1}.Type='Mooney-Rivlin';
+    FEB_struct.Materials{1}.Name='bone';
+    FEB_struct.Materials{1}.Properties={'c1','c2','k'};
+    FEB_struct.Materials{1}.Values={c1,c2,k};
 
+elseif strcmp(mat,'neo-Hookean');
+    FEB_struct.Materials{1}.Type='neo-Hookean';
+    FEB_struct.Materials{1}.Name='bone';
+    FEB_struct.Materials{1}.Properties={'E','v'};
+    FEB_struct.Materials{1}.Values={E,nu};
+
+elseif strcmp(mat,'rigid body');
+    FEB_struct.Materials{1}.Type='rigid body';
+    FEB_struct.Materials{1}.Name='bone';
+    FEB_struct.Materials{1}.Properties={'density','E','v'};
+    FEB_struct.Materials{1}.Values={rho,E,nu};        
+    
+else
+    error('Model of material not specified. Stopping...');
+end
+    
 %Control section
 FEB_struct.Control.AnalysisType='static';
 FEB_struct.Control.Properties={'time_steps','step_size',...
     'max_refs','max_ups',...
     'dtol','etol','rtol','lstol'};
-FEB_struct.Control.Values={50,0.05,...
-    25,0,...
-    0.001,0.01,0,0.9};
+FEB_struct.Control.Values={ntime,dt,...
+    max_refs,max_ups,...
+    dtol,etol,rtol,lstol};
 FEB_struct.Control.TimeStepperProperties={'dtmin','dtmax','max_retries','opt_iter','aggressiveness'};
-FEB_struct.Control.TimeStepperValues={1e-4,0.05,5,10,1};
+FEB_struct.Control.TimeStepperValues={dtmin,dtmax,max_re,opt_iter,aggr};
 
 %Defining node sets
 FEB_struct.Geometry.NodeSet{1}.Set=z_bot;
-FEB_struct.Geometry.NodeSet{1}.Name='bcFixList';
+FEB_struct.Geometry.NodeSet{1}.Name='fixedBC';
 FEB_struct.Geometry.NodeSet{2}.Set=z_top;
-FEB_struct.Geometry.NodeSet{2}.Name='bcPrescribeList';
+FEB_struct.Geometry.NodeSet{2}.Name='prescribedBC';
 
 %Adding BC information
 FEB_struct.Boundary.Fix{1}.bc='x';
@@ -193,6 +278,24 @@ FEB_struct.Boundary.Prescribe{3}.Scale=displacementMagnitude(3);
 FEB_struct.Boundary.Prescribe{3}.bc='z';
 FEB_struct.Boundary.Prescribe{3}.lc=1;
 FEB_struct.Boundary.Prescribe{3}.Type='relative';
+
+if strcmp(mat,'rigid body')
+    % adds constraints to lower surface at NodeSet{1}
+    FEB_struct.Constraints{1}.RigidId = '1';    
+    FEB_struct.Constraints{1}.Fix{1}.bc='x';
+    FEB_struct.Constraints{1}.Fix{1}.SetName=FEB_struct.Geometry.NodeSet{1}.Name;
+    FEB_struct.Constraints{1}.Fix{2}.bc='y';
+    FEB_struct.Constraints{1}.Fix{2}.SetName=FEB_struct.Geometry.NodeSet{1}.Name;
+    FEB_struct.Constraints{1}.Fix{3}.bc='z';
+    FEB_struct.Constraints{1}.Fix{3}.SetName=FEB_struct.Geometry.NodeSet{1}.Name;
+    
+    FEB_struct.Constraints{1}.Fix{4}.bc='Rx';
+    FEB_struct.Constraints{1}.Fix{4}.SetName=FEB_struct.Geometry.NodeSet{1}.Name;
+    FEB_struct.Constraints{1}.Fix{5}.bc='Ry';
+    FEB_struct.Constraints{1}.Fix{5}.SetName=FEB_struct.Geometry.NodeSet{1}.Name;
+    FEB_struct.Constraints{1}.Fix{6}.bc='Rz';
+    FEB_struct.Constraints{1}.Fix{6}.SetName=FEB_struct.Geometry.NodeSet{1}.Name;    
+end
 
 %Load curves
 FEB_struct.LoadData.LoadCurves.id=1;
