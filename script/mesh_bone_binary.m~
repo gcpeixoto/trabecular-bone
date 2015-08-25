@@ -28,10 +28,14 @@ svmsh = fullfile(save_dir,'/msh');
 % output FEB
 modelName=fullfile(feb_dir,'boneCompression');
 
+% output DAT
+out = fullfile(pwd,'../dat/');
+
+
 %% PARAMETER SETTINGS
 
 iter = 10; % number of iterations for mesh smoothing operation
-nimg = 40; % number of images to parse
+nimg = 20; % number of images to parse
 maxgap = 10; % maximum gap size for image fill holes 
 
 % image smoothing
@@ -164,13 +168,32 @@ opt.radbound = rdbound;
 % in PreView is still required. I don't know why...
 elem(:,1:4) = meshreorient(node(:,1:3),elem(:,1:4));
 
+%% AREAS COMPUTATION
+% computation of surface area through Gibbon
+areas = patch_area( face(:,1:3),node(:,1:3) ); % area per element
+As = cumsum(areas); 
+As = As(end); % sum of all areas
+fprintf('Total surface area = %8.2f \n',As);
+
+% approximation for the irregular cross section surface areas
+top_area = calc_irreg_section_area('+z',1/rdbound,node,elem(:,1:4)); 
+bot_area = calc_irreg_section_area('-z',1/rdbound,node,elem(:,1:4)); 
+
+effective_area = As - ( top_area + bot_area );
+max_sec_area = max(top_area,bot_area);
+min_sec_area = min(top_area,bot_area);
+
+ratios_area = [ top_area/As bot_area/As max_sec_area/min_sec_area ];
+
 %% FIND AND SET DISPLACEMENT BCs
 
 % extrema nodes
 [z_top,zmax] = find_nodes( node, top_tol, '+z');
 [z_bot,zmin] = find_nodes( node, bot_tol, '-z');
 
-% Define displacement magnitudes
+% Define displacement magnitude scale
+% (?) It seems that the choice of direction (+ or -) has no effect
+% on the simulated values. Depends on load curves only?
 if dpz > 0    
     warning('z-displacement B.C. magnitude was inverted from %f to %f ',dpz,-dpz);
     dpz = - dpz;    
@@ -297,10 +320,12 @@ if strcmp(mat,'rigid body')
     FEB_struct.Constraints{1}.Fix{6}.SetName=FEB_struct.Geometry.NodeSet{1}.Name;    
 end
 
-%Load curves
+%Load curves 
+% Fix inside PreView
+% 3 load curves are required for each direction separately. 
 FEB_struct.LoadData.LoadCurves.id=1;
 FEB_struct.LoadData.LoadCurves.type={'linear'};
-FEB_struct.LoadData.LoadCurves.loadPoints={[0 0;1 1;]};
+FEB_struct.LoadData.LoadCurves.loadPoints={[0 0;1 -1;]};
 
 %Adding output requests
 FEB_struct.Output.VarTypes={'displacement','stress','relative volume','shell thickness'};
@@ -315,3 +340,11 @@ FEB_struct.data_types={'ux;uy;uz'};
 
 FEB_struct.disp_opt=0; %Display waitbars option
 febStruct2febFile(FEB_struct);
+
+%% SAVING MESH INFORMATION
+
+save_area_info( fullfile(out,'areas.dat'), As, effective_area, ...
+    top_area, bot_area, ...
+        ratios_area(1), ratios_area(2), ratios_area(3) 
+
+

@@ -3,4 +3,6 @@
 ./febio/sim/
 .gitignore
 *.jpg
-
+*.vtu
+*.txt
+*.dat
