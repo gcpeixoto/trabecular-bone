@@ -31,7 +31,7 @@ modelName=fullfile(feb_dir,'boneCompression');
 %% PARAMETER SETTINGS
 
 iter = 10; % number of iterations for mesh smoothing operation
-nimg = 40; % number of images to parse
+nimg = 240; % number of images to parse
 maxgap = 10; % maximum gap size for image fill holes 
 
 % image smoothing
@@ -48,7 +48,7 @@ top_tol = 1e-1;
 bot_tol = 1e-1;
 dpx = 0.0;
 dpy = 0.0;
-dpz = 0.0;
+dpz = -1.0;
 
 % plotting
 viewAz = 65;
@@ -300,7 +300,7 @@ end
 %Load curves
 FEB_struct.LoadData.LoadCurves.id=1;
 FEB_struct.LoadData.LoadCurves.type={'linear'};
-FEB_struct.LoadData.LoadCurves.loadPoints={[0 0;1 1;]};
+FEB_struct.LoadData.LoadCurves.loadPoints={[0 0;0 1;]};
 
 %Adding output requests
 FEB_struct.Output.VarTypes={'displacement','stress','relative volume','shell thickness'};

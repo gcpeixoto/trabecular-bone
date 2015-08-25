@@ -8,7 +8,9 @@ feb_dir = fullfile(pwd,'../febio');
 
 addpath( genpath(i2m_path), fullfile(pwd,'../lib'), genpath(img_dir));
 
-rm('/Users/gustavo/trabecular-bone/febio/*.*');
+% deletes old files
+delete( fullfile(feb_dir,'/*.*') );
+delete( fullfile(feb_dir,'/sim/*.*') );
 
 %% IMAGE DIRECTORY
 
@@ -46,7 +48,7 @@ top_tol = 1e-1;
 bot_tol = 1e-1;
 dpx = 0.0;
 dpy = 0.0;
-dpz = 0.0;
+dpz = -1.0;
 
 % plotting
 viewAz = 65;
@@ -72,7 +74,7 @@ plt = 'y'; % 'n' plot bone structure?
 %
 % See Section 3.5.1 of Febio Manual for default values
 
-ntime = 100; % number of iterations 
+ntime = 50; % number of iterations 
 dt = 0.05; % time step
 max_refs = 25; % max number of stiffness reformations (recalculation and factorization)
 max_ups = 0; % max number of BFGS stiffness updates;

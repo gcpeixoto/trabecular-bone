@@ -2,4 +2,5 @@
 .DS_Store
 ./febio/sim/
 .gitignore
+*.jpg
 
