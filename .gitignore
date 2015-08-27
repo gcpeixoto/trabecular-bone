@@ -6,3 +6,5 @@
 *.vtu
 *.txt
 *.dat
+*.xplt
+*.plt

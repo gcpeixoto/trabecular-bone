@@ -2,11 +2,12 @@ clear all; close all; clc;
 
 %% PATHS
 i2m_path = '/Users/gustavo/Programs/iso2mesh';
+gib_path = 'Users/gustavo/Programs/gibbon';
 img_dir = fullfile(pwd,'../img');
 save_dir = fullfile(pwd,'../save');
 feb_dir = fullfile(pwd,'../febio');
 
-addpath( genpath(i2m_path), fullfile(pwd,'../lib'), genpath(img_dir));
+addpath( genpath(i2m_path), genpath(gib_path), fullfile(pwd,'../lib'), genpath(img_dir));
 
 % deletes old files
 delete( fullfile(feb_dir,'/*.*') );
@@ -329,7 +330,8 @@ FEB_struct.LoadData.LoadCurves.loadPoints={[0 0;1 -1;]};
 
 %Adding output requests
 FEB_struct.Output.VarTypes={'displacement','position','initial position',...    
-    'relative volume','shell thickness','stress','Lagrange strain','pressure'};
+    'relative volume','shell thickness',...
+    'stress','Lagrange strain','pressure','reaction forces'};
 
 %Specify log file output
 run_node_output_name=[FEB_struct.run_filename(1:end-4),'_node_out.txt'];
