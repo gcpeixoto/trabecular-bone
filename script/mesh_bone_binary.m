@@ -35,25 +35,31 @@ out = fullfile(pwd,'../dat/');
 
 %% PARAMETER SETTINGS
 
-iter = 3; % number of iterations for mesh smoothing operation
-nimg = 40; % number of images to parse
-maxgap = 10; % maximum gap size for image fill holes 
+iter = 1; % number of iterations for mesh smoothing operation
+nimg = 70; % number of images to parse
+maxgap = 15; % maximum gap size for image fill holes 
 
 % image smoothing
 proc = 'smooth';
 
 % volumetric mesh
 isovalue = []; % level-set value \phi; understand the formation law
-maxvoltet = 120; % tetrahedra volume; unit^3: pixel, voxel??
+maxvoltet = 50; % tetrahedra volume; unit^3: pixel, voxel??
 rdbound = 10; % Delaunay's sphere radius
 method = 'cgalmesh'; % meshing method;
 
 % b.c. setting
-top_tol = 1e-1;
-bot_tol = 1e-1;
+top_tol = 5*1e-1;
+bot_tol = 5*1e-1;
 dpx = 0.0;
 dpy = 0.0;
-dpz = -1.0;
+dpz = -0.1*nimg; % 'p% of height'; set 'scale factor' in Preview
+
+% how the boundary condition will be applied
+bctype = 'pressure';
+%bctype = 'displacement';
+bcset = 'element';
+%bcset = 'node';
 
 % plotting
 viewAz = 65;
@@ -96,23 +102,23 @@ opt_iter = 10; % optimal number of iterations
 aggr = 1; % aggressiveness (?)
 
 % material choice
-%mat = 'rigid body';
+%mat = 'rigid body'; % not OK with constraint imposition
 %mat = 'Mooney-Rivlin';
-mat = 'neo-Hookean';
+mat = 'neo-Hookean'; % keep as default, although used for cartilage
 
 if strcmp(mat,'Mooney-Rivlin');
-    fprintf('Running for material: Mooney-Rivlin.\n');
+    fprintf('----> Running for material: Mooney-Rivlin.\n');
     c1 = 1e-3; % coefficient of first invariant term
     c2 = 0; % coefficient of second invariant term
     k = c1*1e3; % bulk modulus
 
 elseif strcmp(mat,'neo-Hookean');
-    fprintf('Running for material: neo-Hookean.\n');
+    fprintf('----> Running for material: neo-Hookean.\n');
     E = 1000.0; % Young modulus
     nu = 0.3; % Poisson' ratio
 
 elseif strcmp(mat,'rigid body');
-    fprintf('Running for material: rigid body.\n');        
+    fprintf('----> Running for material: rigid body.\n');        
     % If the center_of_mass parameter is 
     % omitted, FEBio will calculate the center of mass automatically. 
     % In this case, a density must be specified. If the center_of_mass 
@@ -142,7 +148,7 @@ for i = 1:nimg
     vimg(:,:,i) = im;        
         
     if strcmp(proc,'smooth') == 1
-        fprintf('Performing binary smoothing on image %d. \n',i);        
+        fprintf('----> Performing binary smoothing on image %d. \n',i);        
         % perform a memory-limited 3D image smoothing
         vimg(:,:,i) = smoothbinvol(vimg(:,:,i),iter);   
                 
@@ -174,11 +180,11 @@ elem(:,1:4) = meshreorient(node(:,1:3),elem(:,1:4));
 areas = patch_area( face(:,1:3),node(:,1:3) ); % area per element
 As = cumsum(areas); 
 As = As(end); % sum of all areas
-fprintf('Total surface area = %8.2f \n',As);
+fprintf('----> Total surface area = %8.2f \n',As);
 
 % approximation for the irregular cross section surface areas
-top_area = calc_irreg_section_area('+z',1/rdbound,node,elem(:,1:4)); 
-bot_area = calc_irreg_section_area('-z',1/rdbound,node,elem(:,1:4)); 
+[top_area, elem_top] = calc_irreg_section_area('+z',top_tol,node,face(:,1:3)); 
+[bot_area, elem_bot] = calc_irreg_section_area('-z',bot_tol,node,face(:,1:3)); 
 
 effective_area = As - ( top_area + bot_area );
 max_sec_area = max(top_area,bot_area);
@@ -200,6 +206,10 @@ if dpz > 0
     dpz = - dpz;    
 end
 displacementMagnitude=[dpx dpy dpz];
+
+% Define pressure magnitude
+% (?) check if this is the real value wanted
+pressureMagnitude = 1.0;
 
 %% VERIFICATION PLOT
 if strcmp(plt,'y'); 
@@ -230,6 +240,7 @@ FEB_struct.Module.Type='solid';
 FEB_struct.run_filename=[modelName,'.feb']; %FEB file name
 FEB_struct.run_logname=[modelName,'.txt']; %FEBio log file name
 
+% Defining material ID
 febMatID = ones( size( elem(:,1),1 ),1 );
 
 %Creating FEB_struct
@@ -239,20 +250,26 @@ FEB_struct.Geometry.ElementType={'tet4'}; %The element types
 FEB_struct.Geometry.ElementMat={febMatID};
 FEB_struct.Geometry.ElementsPartName={'Trabeculae'};
 
-% DEFINING MATERIALS
+%Defining surfaces
+FEB_struct.Geometry.Surface{1}.Set=elem_top;
+FEB_struct.Geometry.Surface{1}.Type='tri3';
+%FEB_struct.Geometry.Surface{1}.Name='Pressure_surface';
+
+
+% DEFINING MATERIAL CONSTITUTIVE RELATION
 if strcmp(mat,'Mooney-Rivlin')
     FEB_struct.Materials{1}.Type='Mooney-Rivlin';
     FEB_struct.Materials{1}.Name='bone';
     FEB_struct.Materials{1}.Properties={'c1','c2','k'};
     FEB_struct.Materials{1}.Values={c1,c2,k};
 
-elseif strcmp(mat,'neo-Hookean');
+elseif strcmp(mat,'neo-Hookean')
     FEB_struct.Materials{1}.Type='neo-Hookean';
     FEB_struct.Materials{1}.Name='bone';
     FEB_struct.Materials{1}.Properties={'E','v'};
     FEB_struct.Materials{1}.Values={E,nu};
 
-elseif strcmp(mat,'rigid body');
+elseif strcmp(mat,'rigid body')
     FEB_struct.Materials{1}.Type='rigid body';
     FEB_struct.Materials{1}.Name='bone';
     FEB_struct.Materials{1}.Properties={'density','E','v'};
@@ -278,32 +295,57 @@ FEB_struct.Geometry.NodeSet{1}.Set=z_bot;
 FEB_struct.Geometry.NodeSet{1}.Name='fixedBC';
 FEB_struct.Geometry.NodeSet{2}.Set=z_top;
 FEB_struct.Geometry.NodeSet{2}.Name='prescribedBC';
+   
+if strcmp(bctype,'displacement')
+    
+    disp('----> Running bctype: displacement.')
+    FEB_struct.Boundary.Prescribe{1}.SetName=FEB_struct.Geometry.NodeSet{2}.Name;
+    FEB_struct.Boundary.Prescribe{1}.Scale=displacementMagnitude(1);
+    FEB_struct.Boundary.Prescribe{1}.bc='x';
+    FEB_struct.Boundary.Prescribe{1}.lc=1;
+    FEB_struct.Boundary.Prescribe{1}.Type='relative';
+    FEB_struct.Boundary.Prescribe{2}.SetName=FEB_struct.Geometry.NodeSet{2}.Name;
+    FEB_struct.Boundary.Prescribe{2}.Scale=displacementMagnitude(2);
+    FEB_struct.Boundary.Prescribe{2}.bc='y';
+    FEB_struct.Boundary.Prescribe{2}.lc=1;
+    FEB_struct.Boundary.Prescribe{2}.Type='relative';
+    FEB_struct.Boundary.Prescribe{3}.SetName=FEB_struct.Geometry.NodeSet{2}.Name;
+    FEB_struct.Boundary.Prescribe{3}.Scale=displacementMagnitude(3);
+    FEB_struct.Boundary.Prescribe{3}.bc='z';
+    FEB_struct.Boundary.Prescribe{3}.lc=1;
+    FEB_struct.Boundary.Prescribe{3}.Type='relative';
 
-%Adding BC information
-FEB_struct.Boundary.Fix{1}.bc='x';
-FEB_struct.Boundary.Fix{1}.SetName=FEB_struct.Geometry.NodeSet{1}.Name;
-FEB_struct.Boundary.Fix{2}.bc='y';
-FEB_struct.Boundary.Fix{2}.SetName=FEB_struct.Geometry.NodeSet{1}.Name;
-FEB_struct.Boundary.Fix{3}.bc='z';
-FEB_struct.Boundary.Fix{3}.SetName=FEB_struct.Geometry.NodeSet{1}.Name;
+    % adding BC information for rigid boundary
+    if strcmp(mat,'rigid body') ~= 1 % if not rigid, prescribe 
+        FEB_struct.Boundary.Fix{1}.bc='x';
+        FEB_struct.Boundary.Fix{1}.SetName=FEB_struct.Geometry.NodeSet{1}.Name;
+        FEB_struct.Boundary.Fix{2}.bc='y';
+        FEB_struct.Boundary.Fix{2}.SetName=FEB_struct.Geometry.NodeSet{1}.Name;
+        FEB_struct.Boundary.Fix{3}.bc='z';
+        FEB_struct.Boundary.Fix{3}.SetName=FEB_struct.Geometry.NodeSet{1}.Name;
+    end
 
-FEB_struct.Boundary.Prescribe{1}.SetName=FEB_struct.Geometry.NodeSet{2}.Name;
-FEB_struct.Boundary.Prescribe{1}.Scale=displacementMagnitude(1);
-FEB_struct.Boundary.Prescribe{1}.bc='x';
-FEB_struct.Boundary.Prescribe{1}.lc=1;
-FEB_struct.Boundary.Prescribe{1}.Type='relative';
-FEB_struct.Boundary.Prescribe{2}.SetName=FEB_struct.Geometry.NodeSet{2}.Name;
-FEB_struct.Boundary.Prescribe{2}.Scale=displacementMagnitude(2);
-FEB_struct.Boundary.Prescribe{2}.bc='y';
-FEB_struct.Boundary.Prescribe{2}.lc=1;
-FEB_struct.Boundary.Prescribe{2}.Type='relative';
-FEB_struct.Boundary.Prescribe{3}.SetName=FEB_struct.Geometry.NodeSet{2}.Name;
-FEB_struct.Boundary.Prescribe{3}.Scale=displacementMagnitude(3);
-FEB_struct.Boundary.Prescribe{3}.bc='z';
-FEB_struct.Boundary.Prescribe{3}.lc=1;
-FEB_struct.Boundary.Prescribe{3}.Type='relative';
+% Pressure loading
+elseif strcmp(bctype,'pressure');   
+    disp('----> Running bctype: pressure.')
+    
+    % zero displacement at bottom
+    FEB_struct.Boundary.Fix{1}.bc='x';
+        FEB_struct.Boundary.Fix{1}.SetName=FEB_struct.Geometry.NodeSet{1}.Name;
+        FEB_struct.Boundary.Fix{2}.bc='y';
+        FEB_struct.Boundary.Fix{2}.SetName=FEB_struct.Geometry.NodeSet{1}.Name;
+        FEB_struct.Boundary.Fix{3}.bc='z';
+        FEB_struct.Boundary.Fix{3}.SetName=FEB_struct.Geometry.NodeSet{1}.Name;
+        
+    FEB_struct.Loads.Surface_load{1}.Type='pressure';    
+    FEB_struct.Loads.Surface_load{1}.lcPar='pressure';
+    FEB_struct.Loads.Surface_load{1}.lcParValue=pressureMagnitude;
+    FEB_struct.Loads.Surface_load{1}.lc=1;     
+    FEB_struct.Loads.Surface_load{1}.Set=elem_top;    
 
-if strcmp(mat,'rigid body')
+end
+
+if strcmp(mat,'rigid body') == 1
     % adds constraints to lower surface at NodeSet{1}
     FEB_struct.Constraints{1}.RigidId = '1';    
     FEB_struct.Constraints{1}.Fix{1}.bc='x';
@@ -328,10 +370,10 @@ FEB_struct.LoadData.LoadCurves.id=1;
 FEB_struct.LoadData.LoadCurves.type={'linear'};
 FEB_struct.LoadData.LoadCurves.loadPoints={[0 0;1 -1;]};
 
+
 %Adding output requests
-FEB_struct.Output.VarTypes={'displacement','position','initial position',...    
-    'relative volume','shell thickness',...
-    'stress','Lagrange strain','pressure','reaction forces'};
+FEB_struct.Output.VarTypes={'displacement', 'relative volume','shell thickness',...
+    'stress','reaction forces'};
 
 %Specify log file output
 run_node_output_name=[FEB_struct.run_filename(1:end-4),'_node_out.txt'];

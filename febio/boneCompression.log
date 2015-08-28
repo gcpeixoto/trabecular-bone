@@ -1,0 +1,110 @@
+===========================================================================
+         ________    _________   _________     __     _________            
+        |        |\ |        |\ |        |\   |  |\  /         \\          
+        |    ____|| |    ____|| |    __  ||   |__|| |    ___    ||         
+        |   |\___\| |   |\___\| |   |\_| ||    \_\| |   //  \   ||         
+        |   ||      |   ||      |   || | ||    __   |  ||    |  ||         
+        |   ||__    |   ||__    |   ||_| ||   |  |\ |  ||    |  ||         
+        |       |\  |       |\  |         \\  |  || |  ||    |  ||         
+        |    ___||  |    ___||  |    ___   || |  || |  ||    |  ||         
+        |   |\__\|  |   |\__\|  |   |\__|  || |  || |  ||    |  ||         
+        |   ||      |   ||      |   ||  |  || |  || |  ||    |  ||         
+        |   ||      |   ||___   |   ||__|  || |  || |   \\__/   ||         
+        |   ||      |        |\ |          || |  || |           ||         
+        |___||      |________|| |__________|| |__||  \_________//          
+                                                                           
+      F I N I T E   E L E M E N T S   F O R   B I O M E C H A N I C S      
+                                                                           
+                 --- v e r s i o n - 2 . 2 . 6 ---                 
+                                                                           
+                                                                           
+  Musculoskeletal Research Laboratory                                      
+  University of Utah                                                       
+  http://mrl.sci.utah.edu                                                  
+                                                                           
+  copyright (c) 2006-2014 - All rights reserved                            
+                                                                              
+ This is the NON-COMMERCIAL version of FEBio or the commercial license        
+ key file could not be found. If you have a key file make sure it is          
+ placed in the same directory as the executable. This version may only        
+ be used for non-commercial purposes as described in the license agreement.   
+ The functionality of this version may be limited compared to the commercial  
+ version. If you wish to obtain a valid commercial license file, please       
+ contact the developers.                                                      
+                                                                           
+===========================================================================
+
+
+ *************************************************************************
+ *                               WARNING                                 *
+ *                                                                       *
+ * 60 isolated vertices removed.                                         *
+ *************************************************************************
+**************************** E R R O R ****************************
+Negative jacobian detected at integration point 1 of element 48284
+Jacobian = -0.576038
+Did you use the right node numbering?
+Nodes:17239,17331,17495,17478
+*******************************************************************
+
+**************************** E R R O R ****************************
+Negative jacobian detected at integration point 1 of element 48486
+Jacobian = -1.15466
+Did you use the right node numbering?
+Nodes:17352,17534,17579,17592
+*******************************************************************
+
+**************************** E R R O R ****************************
+Negative jacobian detected at integration point 1 of element 48782
+Jacobian = -1.69616
+Did you use the right node numbering?
+Nodes:17482,17579,17730,17616
+*******************************************************************
+
+**************************** E R R O R ****************************
+Negative jacobian detected at integration point 1 of element 65375
+Jacobian = -5.20383
+Did you use the right node numbering?
+Nodes:23683,23856,24027,24028
+*******************************************************************
+
+**************************** E R R O R ****************************
+Negative jacobian detected at integration point 1 of element 66447
+Jacobian = -5.10998
+Did you use the right node numbering?
+Nodes:24027,24028,24282,24469
+*******************************************************************
+
+**************************** E R R O R ****************************
+Negative jacobian detected at integration point 1 of element 88500
+Jacobian = -3.83687
+Did you use the right node numbering?
+Nodes:32238,32280,32391,32591
+*******************************************************************
+
+**************************** E R R O R ****************************
+Negative jacobian detected at integration point 1 of element 88551
+Jacobian = -1.83896
+Did you use the right node numbering?
+Nodes:32261,32416,32509,32452
+*******************************************************************
+
+**************************** E R R O R ****************************
+Negative jacobian detected at integration point 1 of element 89211
+Jacobian = -2.33644
+Did you use the right node numbering?
+Nodes:32480,32549,32696,32747
+*******************************************************************
+
+**************************** E R R O R ****************************
+Negative jacobian detected at integration point 1 of element 100089
+Jacobian = -0.926146
+Did you use the right node numbering?
+Nodes:36822,36846,36899,36887
+*******************************************************************
+
+**************************** E R R O R ****************************
+ Found 9 initially inverted elements.
+ Run will be aborted.
+*******************************************************************
+

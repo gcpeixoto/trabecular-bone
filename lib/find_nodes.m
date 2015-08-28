@@ -48,7 +48,7 @@ else
     fprintf( strcat( st, fprintf( 'extremum = %f \n', am ) ) );
     i = 1;
     while (i <= len)        
-        fprintf( 'node: %d \n', vnodes(i) );
+        %fprintf( 'node: %d \n', vnodes(i) );
         i = i+1;
     end
 end
