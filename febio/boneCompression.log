@@ -1,0 +1,124 @@
+===========================================================================
+         ________    _________   _________     __     _________            
+        |        |\ |        |\ |        |\   |  |\  /         \\          
+        |    ____|| |    ____|| |    __  ||   |__|| |    ___    ||         
+        |   |\___\| |   |\___\| |   |\_| ||    \_\| |   //  \   ||         
+        |   ||      |   ||      |   || | ||    __   |  ||    |  ||         
+        |   ||__    |   ||__    |   ||_| ||   |  |\ |  ||    |  ||         
+        |       |\  |       |\  |         \\  |  || |  ||    |  ||         
+        |    ___||  |    ___||  |    ___   || |  || |  ||    |  ||         
+        |   |\__\|  |   |\__\|  |   |\__|  || |  || |  ||    |  ||         
+        |   ||      |   ||      |   ||  |  || |  || |  ||    |  ||         
+        |   ||      |   ||___   |   ||__|  || |  || |   \\__/   ||         
+        |   ||      |        |\ |          || |  || |           ||         
+        |___||      |________|| |__________|| |__||  \_________//          
+                                                                           
+      F I N I T E   E L E M E N T S   F O R   B I O M E C H A N I C S      
+                                                                           
+                 --- v e r s i o n - 2 . 2 . 6 ---                 
+                                                                           
+                                                                           
+  Musculoskeletal Research Laboratory                                      
+  University of Utah                                                       
+  http://mrl.sci.utah.edu                                                  
+                                                                           
+  copyright (c) 2006-2014 - All rights reserved                            
+                                                                              
+ This is the NON-COMMERCIAL version of FEBio or the commercial license        
+ key file could not be found. If you have a key file make sure it is          
+ placed in the same directory as the executable. This version may only        
+ be used for non-commercial purposes as described in the license agreement.   
+ The functionality of this version may be limited compared to the commercial  
+ version. If you wish to obtain a valid commercial license file, please       
+ contact the developers.                                                      
+                                                                           
+===========================================================================
+
+
+ *************************************************************************
+ *                               WARNING                                 *
+ *                                                                       *
+ * 1 isolated vertex removed.                                            *
+ *************************************************************************
+
+
+ FILES USED
+===========================================================================
+	Input file : boneCompression.feb
+	Plot file  : boneCompression.xplt
+	Log file   : boneCompression.log
+
+
+ CONTROL DATA
+===========================================================================
+	Module type .................................... : solid
+	Analysis type .................................. : quasi-static
+	Plane strain mode .............................. : no
+	Number of materials ............................ : 1
+	Number of nodes ................................ : 495
+	Number of solid elements ....................... : 1947
+	Number of shell elements ....................... : 0
+	Number of truss elements ....................... : 0
+	Number of timesteps ............................ : 100
+	Time step size ................................. : 0.1
+	Auto time stepper activated .................... : yes
+	  Optimal nr of iterations ..................... : 10
+	  Minimum allowable step size .................. : 0.0001
+	  Maximum allowable step size .................. : 0.05
+	Number of loadcurves ........................... : 1
+	Number of displacement boundary conditions ..... : 0
+	Number of concentrated nodal forces ............ : 0
+	Max nr of stiffness reformations ............... : 25
+	per time steps
+	Max nr of Quasi-Newton iterations .............. : 0
+	between stiffness matrix reformations
+	Displacement convergence tolerance ............. : 0.001
+	Energy convergence tolerance ................... : 0.01
+	Residual convergence tolerance ................. : 0
+	Minimal residual value ......................... : 1e-20
+	Linesearch convergence tolerance ............... : 0.9
+	Minimum line search size ....................... : 0.01
+	Maximum number of line search iterations ....... : 5
+	Max condition number ........................... : 100000
+
+
+ OUTPUT DATA
+===========================================================================
+	plot level ................................ : major iterations
+	plotfile format ........................... : FEBIO
+		Nodal Variables:
+			displacement         (type = vec3f, format = NODE)
+			reaction forces      (type = vec3f, format = NODE)
+		Domain Variables:
+			relative volume      (type = float, format = ITEM)
+			shell thickness      (type = float, format = COMP)
+			stress               (type = mat3fs, format = ITEM)
+
+
+ MATERIAL DATA
+===========================================================================
+  1 - bone (type: rigid body)
+	density ........................................... : 1030
+	density ........................................... : 1030
+	E ................................................. : 1
+	v ................................................. : 0
+	parent_id ......................................... : -1
+	center_of_mass .................................... : 0,0,0
+
+
+ LOADCURVE DATA
+===========================================================================
+  1
+         0         0
+         1         1
+
+
+ LINEAR SOLVER DATA
+===========================================================================
+	Solver type ............................... : Pardiso
+
+
+===== reforming stiffness matrix:
+	Nr of equations ........................... : 1
+	Nr of nonzeroes in stiffness matrix ....... : 1
+

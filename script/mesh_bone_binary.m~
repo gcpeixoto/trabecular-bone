@@ -1,3 +1,37 @@
+%% mesh_bone_binary
+
+%{
+Author: Gustavo Peixoto de Oliveira
+
+Description: mesher with Febio embedded structures intended to simulate
+bone structures generated from image sequence reading.
+
+Matlab toolbox dependencies: 
+
+- iso2mesh by Qianqian Fang,
+- gibbon by Kevin Moherman
+
+Troubleshooting notes:
+
+* Sometimes, iso2mesh seems to create meshes with 'isolated nodes'. These
+nodes may be observed in the node subplot created by calling 'plotmesh'. 
+Generally, run the script and mesh again might correct this problem,
+although I'm not sure if 'cgalmesh' uses some randomic process that 
+doesn't produces the same mesh in each run. On the other hand, 
+adjusting the following parameters may help:
+
+- 'maxgap': increasing it produces more isolated nodes in the final mesh
+
+- rdbound: helps to avoid isolated nodes;
+
+* While running for material 'rigid body', check if the XML structure
+in file .feb shows up 'mat=49' at 'id' field for the material. If so,
+force by hand 'mat=1'. This is an error of the XML node builder 
+that prevents PreView of reading the file. I don't know why this error
+happens.
+
+%}
+
 clear all; close all; clc;
 
 %% PATHS
@@ -12,6 +46,13 @@ addpath( genpath(i2m_path), genpath(gib_path), fullfile(pwd,'../lib'), genpath(i
 % deletes old files
 delete( fullfile(feb_dir,'/*.*') );
 delete( fullfile(feb_dir,'/sim/*.*') );
+
+%% DIARY
+% creating and enabling diary
+diary( fullfile(save_dir,'mesh_bone_binary_log.txt') );
+diary on
+
+disp('==== MESH_BONE_BINARY ====')
 
 %% IMAGE DIRECTORY
 
@@ -37,20 +78,20 @@ out = fullfile(pwd,'../dat/');
 
 iter = 1; % number of iterations for mesh smoothing operation
 nimg = 4; % number of images to parse
-maxgap = 5; % maximum gap size for image fill holes 
+maxgap = 1; % maximum gap size for image fill holes 
 
 % image smoothing
 proc = 'smooth';
 
 % volumetric mesh
 isovalue = []; % level-set value \phi; understand the formation law
-maxvoltet = 50; % tetrahedra volume; unit^3: pixel, voxel??
-rdbound = 10; % Delaunay's sphere radius
+maxvoltet = 0.5; % tetrahedra volume; unit^3: pixel, voxel??
+rdbound = 2; % Delaunay's sphere radius
 method = 'cgalmesh'; % meshing method;
 
 % b.c. setting
 top_tol = 0.3;
-bot_tol = 0.1;
+bot_tol = 0.22;
 dpx = 0.0;
 dpy = 0.0;
 dpz = -0.1*nimg; % 'p% of height'; set 'scale factor' in Preview
@@ -58,8 +99,6 @@ dpz = -0.1*nimg; % 'p% of height'; set 'scale factor' in Preview
 % how the boundary condition will be applied
 bctype = 'pressure';
 %bctype = 'displacement';
-bcset = 'element';
-%bcset = 'node';
 
 % plotting
 viewAz = 65;
@@ -68,25 +107,29 @@ plt = 'y'; % 'n' plot bone structure?
 
 %% FEBIO STRUCTURE CONTROL SETTINGS
 
-% * When max_ups is set to 0, FEBio will use the Full-Newton method 
-% instead of the BFGS method. In other words, the stiffness matrix 
-% is reformed for every iteration. In this case it is recommended 
-% to increase the number of max_refs (to e.g. 50), since the default 
-% value might cause FEBio to terminate prematurely when convergence 
-% is slow.
-%
-% * The lstol parameter controls the scaling of the vector direction 
-% obtained from the line search. A line search method is used to 
-% improve the convergence of the nonlinear (quasi-) Newton solution 
-% algorithm. After each BFGS or Newton iteration, this algorithm 
-% searches in the direction of the displacement increment for a solution 
-% that has less energy (that is, residual multiplied with the displacement 
-% increment) than the previous iteration.
-%
-% See Section 3.5.1 of Febio Manual for default values
+%{ 
 
-ntime = 50; % number of iterations 
-dt = 0.05; % time step
+* When max_ups is set to 0, FEBio will use the Full-Newton method 
+instead of the BFGS method. In other words, the stiffness matrix 
+is reformed for every iteration. In this case it is recommended 
+to increase the number of max_refs (to e.g. 50), since the default 
+value might cause FEBio to terminate prematurely when convergence 
+is slow.
+
+* The lstol parameter controls the scaling of the vector direction 
+obtained from the line search. A line search method is used to 
+improve the convergence of the nonlinear (quasi-) Newton solution 
+algorithm. After each BFGS or Newton iteration, this algorithm 
+searches in the direction of the displacement increment for a solution 
+that has less energy (that is, residual multiplied with the displacement 
+increment) than the previous iteration.
+
+See Section 3.5.1 of Febio Manual for default values
+
+%}
+
+ntime = 100; % number of iterations 
+dt = 0.1; % initial time step
 max_refs = 25; % max number of stiffness reformations (recalculation and factorization)
 max_ups = 0; % max number of BFGS stiffness updates;
 dtol = 0.001; % convergence tolerance on displacements
@@ -102,9 +145,9 @@ opt_iter = 10; % optimal number of iterations
 aggr = 1; % aggressiveness (?)
 
 % material choice
-%mat = 'rigid body'; % not OK with constraint imposition
+mat = 'rigid body'; % not OK with constraint imposition
 %mat = 'Mooney-Rivlin';
-mat = 'neo-Hookean'; % keep as default, although used for cartilage
+%mat = 'neo-Hookean'; % keep as default, although used for cartilage
 
 if strcmp(mat,'Mooney-Rivlin');
     fprintf('----> Running for material: Mooney-Rivlin.\n');
@@ -114,7 +157,7 @@ if strcmp(mat,'Mooney-Rivlin');
 
 elseif strcmp(mat,'neo-Hookean');
     fprintf('----> Running for material: neo-Hookean.\n');
-    E = 1000.0; % Young modulus
+    E = 1e+9; % Young modulus
     nu = 0.3; % Poisson' ratio
 
 elseif strcmp(mat,'rigid body');
@@ -125,7 +168,7 @@ elseif strcmp(mat,'rigid body');
     % is defined the density parameter may be omitted. 
     % Omitting both will generate an error message.
     rho = 1030;     
-    E = 1000.0; % Young modulus
+    E = 1e+9; % Young modulus
     nu = 0.3; % Poisson' ratio    
 else
     error('Model of material not specified. Stopping...');
@@ -177,26 +220,36 @@ elem(:,1:4) = meshreorient(node(:,1:3),elem(:,1:4));
 
 %% VERIFICATION PLOT
 if strcmp(plt,'y'); 
-    subplot(1,3,1)
+    subplot(2,2,1)
     title('Trabecular bone structure');     
     view(viewAz,vieEl);
     camlight('headlight');
     lighting phong;    
     plotmesh(node,face)
+    hold on  
+    plotmesh(node,face,strcat('abs(z - max(z) ) <', num2str(top_tol)),'facecolor','y');
+    plotmesh(node,face,strcat('abs(z - min(z) ) <', num2str(bot_tol)),'facecolor','b');
     
-    subplot(1,3,2)    
+    subplot(2,2,2)
+    title('Trabecular bone structure');     
+    view(viewAz,vieEl);
+    camlight('headlight');
+    lighting phong;        
+    plotmesh(node);    
+    
+    subplot(2,2,3)    
     title('Top BC faces');     
     view(viewAz,vieEl);
     camlight('headlight');
     lighting phong;    
-    plotmesh(node,face,strcat('abs(z - max(z) ) <', num2str(top_tol)));
+    plotmesh(node,face,strcat('abs(z - max(z) ) <', num2str(top_tol)),'facecolor','y');
     
-    subplot(1,3,3)    
+    subplot(2,2,4)    
     title('Bottom BC faces');     
     view(viewAz,vieEl);
     camlight('headlight');
     lighting phong;    
-    plotmesh(node,face,strcat('abs(z - min(z) ) <', num2str(bot_tol)),'facecolor);
+    plotmesh(node,face,strcat('abs(z - min(z) ) <', num2str(bot_tol)),'facecolor','b');
 end
 
 %% AREAS COMPUTATION
@@ -237,13 +290,14 @@ pressureMagnitude = 1.0;
 
 %% MSH saving
 
-% BUG? method savemsh outputs a mesh which is not being imported by PreView; 
-% PreView message Failed importing Gmsh fle.
-% Failed finding EndElements. 
-%
-% It's necessary to open the mesh in Gmsh and save it again in case of 
-% importing it into PreView.
+%{
+BUG? method savemsh outputs a mesh which is not being imported by PreView; 
+PreView message Failed importing Gmsh fle.
+Failed finding EndElements. 
 
+It's necessary to open the mesh in Gmsh and save it again in case of 
+importing it into PreView.
+%}
 savemsh(node,elem, fullfile(svmsh,'trabecula.msh'), {'trabecula'});
 
 %% CONSTRUCTING FEB MODEL (from Gibbon code example)
@@ -341,22 +395,25 @@ if strcmp(bctype,'displacement')
     end
 
 % Pressure loading
-elseif strcmp(bctype,'pressure');   
+elseif strcmp(bctype,'pressure')   
     disp('----> Running bctype: pressure.')
     
-    % zero displacement at bottom
-    FEB_struct.Boundary.Fix{1}.bc='x';
-    %FEB_struct.Boundary.Fix{1}.SetName=FEB_struct.Geometry.NodeSet{1}.Name;
-    FEB_struct.Boundary.Fix{1}.Set=elem_bot;
-    
-    FEB_struct.Boundary.Fix{2}.bc='y';
-    %FEB_struct.Boundary.Fix{2}.SetName=FEB_struct.Geometry.NodeSet{1}.Name;
-    FEB_struct.Boundary.Fix{2}.Set=elem_bot;
-    
-    FEB_struct.Boundary.Fix{3}.bc='z';
-    %FEB_struct.Boundary.Fix{3}.SetName=FEB_struct.Geometry.NodeSet{1}.Name;
-    FEB_struct.Boundary.Fix{3}.Set=elem_bot;
+    % zero displacement doesn't apply together with constraints
+    % for rigid body, constraints are set below 
+    if strcmp(mat,'rigid body') ~= 1 
         
+        % zero displacement at bottom
+        FEB_struct.Boundary.Fix{1}.bc='x';
+        FEB_struct.Boundary.Fix{1}.SetName=FEB_struct.Geometry.NodeSet{1}.Name;
+
+        FEB_struct.Boundary.Fix{2}.bc='y';
+        FEB_struct.Boundary.Fix{2}.SetName=FEB_struct.Geometry.NodeSet{1}.Name;
+
+        FEB_struct.Boundary.Fix{3}.bc='z';
+        FEB_struct.Boundary.Fix{3}.SetName=FEB_struct.Geometry.NodeSet{1}.Name;        
+        
+    end
+
     % pressure condition at top
     FEB_struct.Loads.Surface_load{1}.Type='pressure';    
     FEB_struct.Loads.Surface_load{1}.lcPar='pressure';
@@ -367,29 +424,53 @@ elseif strcmp(bctype,'pressure');
 end
 
 if strcmp(mat,'rigid body') == 1
-    % adds constraints to lower surface at NodeSet{1}
+    
+    % adds constraints to lower surface
+    
+    % DOF x
     FEB_struct.Constraints{1}.RigidId = '1';    
     FEB_struct.Constraints{1}.Fix{1}.bc='x';
-    FEB_struct.Constraints{1}.Fix{1}.SetName=FEB_struct.Geometry.NodeSet{1}.Name;
-    FEB_struct.Constraints{1}.Fix{2}.bc='y';
-    FEB_struct.Constraints{1}.Fix{2}.SetName=FEB_struct.Geometry.NodeSet{1}.Name;
-    FEB_struct.Constraints{1}.Fix{3}.bc='z';
-    FEB_struct.Constraints{1}.Fix{3}.SetName=FEB_struct.Geometry.NodeSet{1}.Name;
+    %FEB_struct.Constraints{1}.Fix{1}.SetName=FEB_struct.Geometry.NodeSet{1}.Name;
+    FEB_struct.Constraints{1}.Fix{1}.Set=elem_bot;
     
+    % DOF y
+    FEB_struct.Constraints{1}.Fix{2}.bc='y';
+    %FEB_struct.Constraints{1}.Fix{2}.SetName=FEB_struct.Geometry.NodeSet{1}.Name;
+    FEB_struct.Constraints{1}.Fix{2}.Set=elem_bot;
+    
+    % DOF z
+    FEB_struct.Constraints{1}.Fix{3}.bc='z';
+    %FEB_struct.Constraints{1}.Fix{3}.SetName=FEB_struct.Geometry.NodeSet{1}.Name;
+    FEB_struct.Constraints{1}.Fix{3}.Set=elem_bot;
+    
+    % DOF rotation x
     FEB_struct.Constraints{1}.Fix{4}.bc='Rx';
-    FEB_struct.Constraints{1}.Fix{4}.SetName=FEB_struct.Geometry.NodeSet{1}.Name;
+    %FEB_struct.Constraints{1}.Fix{4}.SetName=FEB_struct.Geometry.NodeSet{1}.Name;
+    FEB_struct.Constraints{1}.Fix{4}.Set=elem_bot;
+    
+    % DOF rotation y
     FEB_struct.Constraints{1}.Fix{5}.bc='Ry';
     FEB_struct.Constraints{1}.Fix{5}.SetName=FEB_struct.Geometry.NodeSet{1}.Name;
+    FEB_struct.Constraints{1}.Fix{5}.Set=elem_bot;
+    
+    % DOF rotation z
     FEB_struct.Constraints{1}.Fix{6}.bc='Rz';
-    FEB_struct.Constraints{1}.Fix{6}.SetName=FEB_struct.Geometry.NodeSet{1}.Name;    
+    %FEB_struct.Constraints{1}.Fix{6}.SetName=FEB_struct.Geometry.NodeSet{1}.Name;    
+    FEB_struct.Constraints{1}.Fix{6}.Set=elem_bot;
 end
 
 %Load curves 
 % Fix inside PreView
-% 3 load curves are required for each direction separately. 
+% 3 load curves are required for each direction separately in displacement 
 FEB_struct.LoadData.LoadCurves.id=1;
 FEB_struct.LoadData.LoadCurves.type={'linear'};
-FEB_struct.LoadData.LoadCurves.loadPoints={[0 0;1 -1;]};
+
+if strcmp(bctype,'displacement')   
+    FEB_struct.LoadData.LoadCurves.loadPoints={[0 0;1 -1;]};
+end
+if strcmp(bctype,'pressure')   
+    FEB_struct.LoadData.LoadCurves.loadPoints={[0 0;1 1;]};
+end
 
 
 %Adding output requests
@@ -411,5 +492,7 @@ febStruct2febFile(FEB_struct);
 
 save_area_info( fullfile(out,'areas.dat'), As, effective_area, ...
     top_area, bot_area, ratios_area(1), ratios_area(2), ratios_area(3) ); 
+
+diary off
 
 
