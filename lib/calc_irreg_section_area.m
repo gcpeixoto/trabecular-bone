@@ -50,13 +50,15 @@ if strcmp(flag,'+x') == 1
             end
         end
         if count >= 2 % criterion: if 2 or more nodes forming an element, save the element
-            A = [A; elem(e,:)];              
+            A = [A; elem(e,:)]; 
+            % removing duplicata
+            A = unique(A,'rows');
         end
     end
     if ~isempty(A)
         As = cumsum( patch_area(A,node) ); % compute areas of the saved elements
         As = As(end); % total area
-        fprintf('----> Total irregular section area (+x) = %8.2f \n',As);
+        fprintf('----> Total irregular section area (+x) = %8.4f \n',As);
     else
         As = 0;
         warning('Area is zero');    
@@ -80,13 +82,15 @@ if strcmp(flag,'-x') == 1
             end
         end
         if count >= 2
-            A = [A; elem(e,:)];            
+            A = [A; elem(e,:)];   
+            % removing duplicata
+            A = unique(A,'rows');
         end
     end
     if ~isempty(A)
         As = cumsum( patch_area(A,node) );
         As = As(end);
-        fprintf('----> Total irregular section area (-x) = %8.2f \n',As);
+        fprintf('----> Total irregular section area (-x) = %8.4f \n',As);
     else
         As = 0;
         warning('Area is zero');
@@ -110,13 +114,15 @@ if strcmp(flag,'+y') == 1
             end
         end
         if count >= 2 % criterion: if 2 or more nodes, save the element
-            A = [A; elem(e,:)];            
+            A = [A; elem(e,:)];  
+            % removing duplicata
+            A = unique(A,'rows');
         end
     end
     if ~isempty(A)
         As = cumsum( patch_area(A,node) ); % compute areas of the saved elements
         As = As(end); % total area
-        fprintf('----> Total irregular section area (+y) = %8.2f \n',As);
+        fprintf('----> Total irregular section area (+y) = %8.4f \n',As);
     else
         As = 0;
         warning('Area is zero');    
@@ -140,13 +146,15 @@ if strcmp(flag,'-y') == 1
             end
         end
         if count >= 2
-            A = [A; elem(e,:)];               
+            A = [A; elem(e,:)];
+            % removing duplicata
+            A = unique(A,'rows');
         end
     end
     if ~isempty(A)
         As = cumsum( patch_area(A,node) );
         As = As(end);
-        fprintf('----> Total irregular section area (-y) = %8.2f \n',As);
+        fprintf('----> Total irregular section area (-y) = %8.4f \n',As);
     else
         As = 0;
         warning('Area is zero');
@@ -170,13 +178,15 @@ if strcmp(flag,'+z') == 1
             end
         end
         if count >= 2 % criterion: if 2 or more nodes, save the element
-            A = [A; elem(e,:)];                         
+            A = [A; elem(e,:)]; 
+            % removing duplicata
+            A = unique(A,'rows');
         end
     end
     if ~isempty(A)
         As = cumsum( patch_area(A,node) ); % compute areas of the saved elements
         As = As(end); % total area
-        fprintf('----> Total irregular section area (+z) = %8.2f \n',As);
+        fprintf('----> Total irregular section area (+z) = %8.4f \n',As);
     else
         As = 0;
         warning('Area is zero');    
@@ -200,22 +210,21 @@ if strcmp(flag,'-z') == 1
             end
         end
         if count >= 2
-            A = [A; elem(e,:)];             
+            A = [A; elem(e,:)]; 
+            % removing duplicata
+            A = unique(A,'rows');
         end
     end
     if ~isempty(A)
         As = cumsum( patch_area(A,node) );
         As = As(end);
-        fprintf('----> Total irregular section area (-z) = %8.2f \n',As);
+        fprintf('----> Total irregular section area (-z) = %8.4f \n',As);
     else
         As = 0;
         warning('Area is zero');
     end
     
 end
-
-% removing duplicata
-A = unique(A,'rows');
 
 end
 

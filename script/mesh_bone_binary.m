@@ -36,8 +36,8 @@ out = fullfile(pwd,'../dat/');
 %% PARAMETER SETTINGS
 
 iter = 1; % number of iterations for mesh smoothing operation
-nimg = 70; % number of images to parse
-maxgap = 15; % maximum gap size for image fill holes 
+nimg = 4; % number of images to parse
+maxgap = 5; % maximum gap size for image fill holes 
 
 % image smoothing
 proc = 'smooth';
@@ -49,8 +49,8 @@ rdbound = 10; % Delaunay's sphere radius
 method = 'cgalmesh'; % meshing method;
 
 % b.c. setting
-top_tol = 5*1e-1;
-bot_tol = 5*1e-1;
+top_tol = 0.3;
+bot_tol = 0.2;
 dpx = 0.0;
 dpy = 0.0;
 dpz = -0.1*nimg; % 'p% of height'; set 'scale factor' in Preview
@@ -175,6 +175,33 @@ opt.radbound = rdbound;
 % in PreView is still required. I don't know why...
 elem(:,1:4) = meshreorient(node(:,1:3),elem(:,1:4));
 
+%% VERIFICATION PLOT
+if strcmp(plt,'y'); 
+    subplot(1,3,1)
+    title('Trabecular bone structure');     
+    view(viewAz,vieEl);
+    camlight('headlight');
+    lighting phong;    
+    plotmesh(node,face)
+    hold on
+    plotmesh(node,face,strcat('abs(z - max(z) ) <', num2str(top_tol)),'facecolor','y');
+    plotmesh(node,face,strcat('abs(z - min(z) ) <', num2str(bot_tol)),'facecolor','b');
+    
+    subplot(1,3,2)    
+    title('Top BC faces');     
+    view(viewAz,vieEl);
+    camlight('headlight');
+    lighting phong;    
+    plotmesh(node,face,strcat('abs(z - max(z) ) <', num2str(top_tol)),'facecolor','y');
+    
+    subplot(1,3,3)    
+    title('Bottom BC faces');     
+    view(viewAz,vieEl);
+    camlight('headlight');
+    lighting phong;    
+    plotmesh(node,face,strcat('abs(z - min(z) ) <', num2str(bot_tol)),'facecolor','b');
+end
+
 %% AREAS COMPUTATION
 % computation of surface area through Gibbon
 areas = patch_area( face(:,1:3),node(:,1:3) ); % area per element
@@ -192,7 +219,7 @@ min_sec_area = min(top_area,bot_area);
 
 ratios_area = [ top_area/As bot_area/As max_sec_area/min_sec_area ];
 
-%% FIND AND SET DISPLACEMENT BCs
+%% FIND AND SET BCs
 
 % extrema nodes
 [z_top,zmax] = find_nodes( node, top_tol, '+z');
@@ -210,15 +237,6 @@ displacementMagnitude=[dpx dpy dpz];
 % Define pressure magnitude
 % (?) check if this is the real value wanted
 pressureMagnitude = 1.0;
-
-%% VERIFICATION PLOT
-if strcmp(plt,'y'); 
-    title('Trabecular bone structure');     
-    view(viewAz,vieEl);
-    camlight('headlight');
-    lighting phong;    
-    plotmesh(node,face)
-end
 
 %% MSH saving
 
@@ -331,12 +349,18 @@ elseif strcmp(bctype,'pressure');
     
     % zero displacement at bottom
     FEB_struct.Boundary.Fix{1}.bc='x';
-        FEB_struct.Boundary.Fix{1}.SetName=FEB_struct.Geometry.NodeSet{1}.Name;
-        FEB_struct.Boundary.Fix{2}.bc='y';
-        FEB_struct.Boundary.Fix{2}.SetName=FEB_struct.Geometry.NodeSet{1}.Name;
-        FEB_struct.Boundary.Fix{3}.bc='z';
-        FEB_struct.Boundary.Fix{3}.SetName=FEB_struct.Geometry.NodeSet{1}.Name;
+    %FEB_struct.Boundary.Fix{1}.SetName=FEB_struct.Geometry.NodeSet{1}.Name;
+    FEB_struct.Boundary.Fix{1}.Set=elem_bot;
+    
+    FEB_struct.Boundary.Fix{2}.bc='y';
+    %FEB_struct.Boundary.Fix{2}.SetName=FEB_struct.Geometry.NodeSet{1}.Name;
+    FEB_struct.Boundary.Fix{2}.Set=elem_bot;
+    
+    FEB_struct.Boundary.Fix{3}.bc='z';
+    %FEB_struct.Boundary.Fix{3}.SetName=FEB_struct.Geometry.NodeSet{1}.Name;
+    FEB_struct.Boundary.Fix{3}.Set=elem_bot;
         
+    % pressure condition at top
     FEB_struct.Loads.Surface_load{1}.Type='pressure';    
     FEB_struct.Loads.Surface_load{1}.lcPar='pressure';
     FEB_struct.Loads.Surface_load{1}.lcParValue=pressureMagnitude;
