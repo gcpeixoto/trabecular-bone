@@ -96,10 +96,14 @@ maxgap = 1; % maximum gap size for image fill holes
 proc = 'smooth';
 
 % volumetric mesh
-isovalue = []; % level-set value \phi; understand the formation law
-maxvoltet = 2; % tetrahedra volume; unit^3: pixel, voxel??
-rdbound = 1; % Delaunay's sphere radius
-method = 'cgalmesh'; % meshing method;
+method = 'cgalmesh';% meshing method;
+isovalue = [];      % level-set value \phi; understand the formation law
+maxvoltet = 2;      % tetrahedra volume; unit^3: pixel, voxel??
+rdbound = 1;        % Delaunay's sphere radius
+angbound = 30;      % miminum angle of a surface triangle
+reratio = 1/2;      % maximum radius-edge ratio
+distbound = 1;      % maximum distance between the center of the surface 
+                    % bounding circle and center of the element bounding sphere
 
 % b.c. setting
 top_tol = 0.3;
@@ -220,19 +224,122 @@ vimg = uint8( vimg ); % convert from 'logical' to 'uint8'
 vimg = fillholes3d(vimg,maxgap);
 
 %% TETRAHEDRAL MESH GENERATION
-% See Iso2mesh manual Section 1.1 streamlined mesh generation: v2m
 
-clear opt;
+%{
+    See Iso2mesh manual Section 1.1 streamlined mesh generation: v2m    
+    
+    * v2m accepts a full or partial volume. For subvolumes, 
+    specify arrays {ix,iy,iz}, which are pixel indices for each direction.
+    
+    * v2m calls the mesher 'cgalv2m', which uses the 4 parameters of the
+    structure 'opt':
+
+        opt.radbound :  defines the maximum surface element size
+        opt.angbound :  defines the miminum angle of a surface triangle
+        opt.distbound:  defines the maximum distance between the 
+                        center of the surface bounding circle and center 
+                        of the element bounding sphere
+        opt.reratio  :  maximum radius-edge ratio
+
+    * a 'pre_cgalmesh.inr' surface mesh file is saved.    
+    ----------------------------------------------------------------------
+    |-> ABOUT .INR format:
+
+        Developped at INRIA. 
+        Contains header of 256 characters followed by the image raw data:         
+            - the image dimensions 
+            - number of values per pixel (or voxel) 
+            - the type of coding (integer, float) 
+            - the size of the coding in bits 
+            - the type of machine that coded the information: sun, dec.
+        
+        An example of an image file:
+
+        #INRIMAGE-4#{ 
+        XDIM=128              // x dimension 
+        YDIM=128              // y dimension 
+        ZDIM=128              // z dimension 
+        VDIM=1                // number of scalar per voxel (1 = scalar image, 3 = 3D image of vectors) 
+        VX=0.66               // voxel size in x 
+        VY=0.66               // voxel size in y 
+        VZ=1                  // voxel size in z 
+        TYPE=unsigned fixed   // float, signed fixed, or unsigned fixed 
+        PIXSIZE=16 bits       // 8, 16, 32, or 64 
+        SCALE=2**0            // not used in my program 
+        CPU=decm              // decm, alpha, pc, sun, sgi 
+                              // little endianness : decm, alpha, pc; 
+                                                     big endianness :sun, sgi
+
+                              // fill with carriage return or with any 
+                                 other information
+
+        ##}                   // until the total size of the header is 256 
+                                 characters (including final newline 
+                                 character) 
+                              // raw data, 
+                                 size=XDIM*YDIM*ZDIM*VDIM*PIXSIZE/8
+ 
+    See <http://serdis.dis.ulpgc.es/~krissian/InrView1/IOformat.html>
+    ----------------------------------------------------------------------
+    * From input .inr, a 3D surface mesh is generated with 
+      CGAL command; then, node coordinates and elements 
+      are saved in 'post_cgalmesh.mesh';
+    |-> How CGAL mesher transforms 0,1 voxel node values into Cartesian 
+        coordinates? 
+        I suppose that for those nodes with binary value 1, it collects 
+        their integer coordinates (x=i,y=j,z=k) and seeds points by 
+        obeying the geometrical criteria - Delaunay. Then, triangulates
+        and tetrahedralizes.
+   
+    * Finally, method 'readmedit' is used to read the '.mesh' file and 
+      output the [node,face,elem] structure.
+    ----------------------------------------------------------------------
+    |-> ABOUT .MESH file
+
+    .mesh allows the access to underlying mesh, peel away it by accessing
+    isosurfaces.
+
+    See <https://people.sc.fsu.edu/~jburkardt/examples/medit/medit.html>
+    ----------------------------------------------------------------------
+    
+    * Method vol2surf is called to convert the binary volume into 
+      isosurfaces by separating holes and regions.
+    
+    
+    
+% Note that the {x,y,z} generated here are in 'voxel' scale.   
+
+%}
+
+%{ 
+=====> BUG?? it seems that 'face' is duplicated inside
+'post_cgalmesh.mesh'. Counting is duplicated for face.
+%}
+
+% mesher and options 
 opt.radbound = rdbound;
+%opt.angbound = angbound;
+%opt.distbound = distbound;
+%opt.reratio = reration;
 [node,elem,face] = v2m(vimg,isovalue,opt,maxvoltet,method);
 
-% mesh reorientation
-% Although I have to use this method, calling 'Invert'
-% in PreView is still required. I don't know why...
-elem(:,1:4) = meshreorient(node(:,1:3),elem(:,1:4));
+%{ 
+  mesh reorientation
+  This method is not producing the optimum effect. 
+  Even if reorient 'elem', 'face', or both, the mesh is not being corrected.
+  Call none of them produces the smallest number of no oriented elements
+  in Febio output. Calling 'Invert' in PreView is still required. 
+  I don't know why...
+%} 
 
-%% VERIFICATION PLOT
-if strcmp(plt,'y'); 
+%elem(:,1:4) = meshreorient(node(:,1:3),elem(:,1:4));
+%face(:,1:3) = meshreorient(node(:,1:3),face(:,1:3));
+
+%% VERIFICATION PLOTS
+
+if strcmp(plt,'y')
+    
+    % mesh
     subplot(2,2,1)
     title('Trabecular bone structure');     
     view(viewAz,vieEl);
@@ -243,13 +350,15 @@ if strcmp(plt,'y');
     plotmesh(node,face,strcat('abs(z - max(z) ) <', num2str(top_tol)),'facecolor','y');
     plotmesh(node,face,strcat('abs(z - min(z) ) <', num2str(bot_tol)),'facecolor','b');
     
+    % nodes
     subplot(2,2,2)
-    title('Trabecular bone structure');     
+    title('Nodes');     
     view(viewAz,vieEl);
     camlight('headlight');
     lighting phong;        
     plotmesh(node);    
     
+    % top face
     subplot(2,2,3)    
     title('Top BC faces');     
     view(viewAz,vieEl);
@@ -257,6 +366,7 @@ if strcmp(plt,'y');
     lighting phong;    
     plotmesh(node,face,strcat('abs(z - max(z) ) <', num2str(top_tol)),'facecolor','y');
     
+    % bottom face
     subplot(2,2,4)    
     title('Bottom BC faces');     
     view(viewAz,vieEl);
