@@ -29,6 +29,10 @@ adjusting the following parameters may help:
 
 - rdbound: helps to avoid isolated nodes;
 
+Additionally, while running Febio, it outputs a message warning
+about the removal of these isolated nodes. That's to say, it doesn't
+consider them.
+
 * While running for material 'rigid body', check if the XML structure
 in file .feb shows up 'mat=49' at 'id' field for the material. If so,
 force by hand 'mat=1'. This is an error of the XML node builder 
@@ -41,6 +45,8 @@ happens.
 clear all; close all; clc;
 
 %% PATHS
+
+% path
 i2m_path = '/Users/gustavo/Programs/iso2mesh';
 gib_path = 'Users/gustavo/Programs/gibbon';
 img_dir = fullfile(pwd,'../img');
@@ -83,7 +89,7 @@ out = fullfile(pwd,'../dat/');
 %% PARAMETER SETTINGS
 
 iter = 1; % number of iterations for mesh smoothing operation
-nimg = 4; % number of images to parse
+nimg = 5; % number of images to parse
 maxgap = 1; % maximum gap size for image fill holes 
 
 % image smoothing
@@ -91,8 +97,8 @@ proc = 'smooth';
 
 % volumetric mesh
 isovalue = []; % level-set value \phi; understand the formation law
-maxvoltet = 0.5; % tetrahedra volume; unit^3: pixel, voxel??
-rdbound = 2; % Delaunay's sphere radius
+maxvoltet = 2; % tetrahedra volume; unit^3: pixel, voxel??
+rdbound = 1; % Delaunay's sphere radius
 method = 'cgalmesh'; % meshing method;
 
 % b.c. setting
@@ -100,11 +106,16 @@ top_tol = 0.3;
 bot_tol = 0.22;
 dpx = 0.0;
 dpy = 0.0;
-dpz = -0.1*nimg; % 'p% of height'; set 'scale factor' in Preview
+dpz = -1.0;
 
 % how the boundary condition will be applied
-bctype = 'pressure';
-%bctype = 'displacement';
+%bctype = 'pressure';
+bctype = 'displacement';
+
+% material choice
+%mat = 'rigid body'; % not OK with constraint imposition
+%mat = 'Mooney-Rivlin';
+mat = 'neo-Hookean'; % keep as default, although used for cartilage
 
 % plotting
 viewAz = 65;
@@ -150,10 +161,6 @@ max_re = 5; % max number of retries allowed per time step
 opt_iter = 10; % optimal number of iterations
 aggr = 1; % aggressiveness (?)
 
-% material choice
-mat = 'rigid body'; % not OK with constraint imposition
-%mat = 'Mooney-Rivlin';
-%mat = 'neo-Hookean'; % keep as default, although used for cartilage
 
 if strcmp(mat,'Mooney-Rivlin');
     fprintf('----> Running for material: Mooney-Rivlin.\n');
@@ -185,8 +192,8 @@ end
 
 n = size(ls_dir,1); 
 im = imread(ls_dir(1).name);
-vimg = zeros( size(im,1), size(im,2), n ); % image array
-for i = 1:nimg
+vimg = zeros( size(im,1), size(im,2), nimg ); % allocating image array
+for i = 1:nimg    
     if (nimg > n); error('Number of images to load exceeded!'); end;
     
     % read and convert
@@ -328,7 +335,7 @@ FEB_struct.Geometry.ElementsPartName={'Trabeculae'};
 %Defining surfaces
 FEB_struct.Geometry.Surface{1}.Set=elem_top;
 FEB_struct.Geometry.Surface{1}.Type='tri3';
-%FEB_struct.Geometry.Surface{1}.Name='Pressure_surface';
+FEB_struct.Geometry.Surface{1}.Name='Pressure_surface';
 
 
 % DEFINING MATERIAL CONSTITUTIVE RELATION
@@ -371,55 +378,62 @@ FEB_struct.Geometry.NodeSet{1}.Name='fixedBC';
 FEB_struct.Geometry.NodeSet{2}.Set=z_top;
 FEB_struct.Geometry.NodeSet{2}.Name='prescribedBC';
    
-if strcmp(bctype,'displacement')
+if strcmp(bctype,'displacement') && ~strcmp(mat,'rigid body')
     
     disp('----> Running bctype: displacement.')
+           
+    % prescribing displacement at top z
     FEB_struct.Boundary.Prescribe{1}.SetName=FEB_struct.Geometry.NodeSet{2}.Name;
-    FEB_struct.Boundary.Prescribe{1}.Scale=displacementMagnitude(1);
-    FEB_struct.Boundary.Prescribe{1}.bc='x';
-    FEB_struct.Boundary.Prescribe{1}.lc=1;
+    FEB_struct.Boundary.Prescribe{1}.Scale=displacementMagnitude(3);
+    FEB_struct.Boundary.Prescribe{1}.bc='z';
+    FEB_struct.Boundary.Prescribe{1}.lc=1;    
     FEB_struct.Boundary.Prescribe{1}.Type='relative';
-    FEB_struct.Boundary.Prescribe{2}.SetName=FEB_struct.Geometry.NodeSet{2}.Name;
-    FEB_struct.Boundary.Prescribe{2}.Scale=displacementMagnitude(2);
-    FEB_struct.Boundary.Prescribe{2}.bc='y';
-    FEB_struct.Boundary.Prescribe{2}.lc=1;
-    FEB_struct.Boundary.Prescribe{2}.Type='relative';
-    FEB_struct.Boundary.Prescribe{3}.SetName=FEB_struct.Geometry.NodeSet{2}.Name;
-    FEB_struct.Boundary.Prescribe{3}.Scale=displacementMagnitude(3);
-    FEB_struct.Boundary.Prescribe{3}.bc='z';
-    FEB_struct.Boundary.Prescribe{3}.lc=1;
-    FEB_struct.Boundary.Prescribe{3}.Type='relative';
+        
+    % fixing at bottom x 
+    FEB_struct.Boundary.Fix{1}.bc='x';
+    FEB_struct.Boundary.Fix{1}.SetName=FEB_struct.Geometry.NodeSet{1}.Name;
+        
+    % fixing at bottom y 
+    FEB_struct.Boundary.Fix{2}.bc='y';
+    FEB_struct.Boundary.Fix{2}.SetName=FEB_struct.Geometry.NodeSet{1}.Name;
+        
+    % fixing at bottom z 
+    FEB_struct.Boundary.Fix{3}.bc='z';
+    FEB_struct.Boundary.Fix{3}.SetName=FEB_struct.Geometry.NodeSet{1}.Name;   
+    
 
-    % adding BC information for rigid boundary
-    if strcmp(mat,'rigid body') ~= 1 % if not rigid, prescribe 
-        FEB_struct.Boundary.Fix{1}.bc='x';
-        FEB_struct.Boundary.Fix{1}.SetName=FEB_struct.Geometry.NodeSet{1}.Name;
-        FEB_struct.Boundary.Fix{2}.bc='y';
-        FEB_struct.Boundary.Fix{2}.SetName=FEB_struct.Geometry.NodeSet{1}.Name;
-        FEB_struct.Boundary.Fix{3}.bc='z';
-        FEB_struct.Boundary.Fix{3}.SetName=FEB_struct.Geometry.NodeSet{1}.Name;
-    end
+elseif strcmp(bctype,'displacement') && strcmp(mat,'rigid body')
+            
+    % fixing at bottom x 
+    FEB_struct.Boundary.Fix{1}.bc='x';
+    FEB_struct.Boundary.Fix{1}.SetName=FEB_struct.Geometry.NodeSet{1}.Name;
+        
+    % fixing at bottom y 
+    FEB_struct.Boundary.Fix{2}.bc='y';
+    FEB_struct.Boundary.Fix{2}.SetName=FEB_struct.Geometry.NodeSet{1}.Name;
+        
+    % fixing at bottom z 
+    FEB_struct.Boundary.Fix{3}.bc='z';
+    FEB_struct.Boundary.Fix{3}.SetName=FEB_struct.Geometry.NodeSet{1}.Name;
+    
+    % prescribing at top z 
+    %FEB_struct.Boundary.Prescribe{1}.bc='z';
+    %FEB_struct.Boundary.Prescribe{1}.SetName=FEB_struct.Geometry.NodeSet{2}.Name;
 
 % Pressure loading
-elseif strcmp(bctype,'pressure')   
+elseif strcmp(bctype,'pressure') && ~strcmp(mat,'rigid body')  
     disp('----> Running bctype: pressure.')
-    
-    % zero displacement doesn't apply together with constraints
-    % for rigid body, constraints are set below 
-    if strcmp(mat,'rigid body') ~= 1 
-        
-        % zero displacement at bottom
-        FEB_struct.Boundary.Fix{1}.bc='x';
-        FEB_struct.Boundary.Fix{1}.SetName=FEB_struct.Geometry.NodeSet{1}.Name;
+            
+    % zero displacement at bottom
+    FEB_struct.Boundary.Fix{1}.bc='x';
+    FEB_struct.Boundary.Fix{1}.SetName=FEB_struct.Geometry.NodeSet{1}.Name;
 
-        FEB_struct.Boundary.Fix{2}.bc='y';
-        FEB_struct.Boundary.Fix{2}.SetName=FEB_struct.Geometry.NodeSet{1}.Name;
+    FEB_struct.Boundary.Fix{2}.bc='y';
+    FEB_struct.Boundary.Fix{2}.SetName=FEB_struct.Geometry.NodeSet{1}.Name;
 
-        FEB_struct.Boundary.Fix{3}.bc='z';
-        FEB_struct.Boundary.Fix{3}.SetName=FEB_struct.Geometry.NodeSet{1}.Name;        
-        
-    end
-
+    FEB_struct.Boundary.Fix{3}.bc='z';
+    FEB_struct.Boundary.Fix{3}.SetName=FEB_struct.Geometry.NodeSet{1}.Name;        
+            
     % pressure condition at top
     FEB_struct.Loads.Surface_load{1}.Type='pressure';    
     FEB_struct.Loads.Surface_load{1}.lcPar='pressure';
@@ -427,42 +441,42 @@ elseif strcmp(bctype,'pressure')
     FEB_struct.Loads.Surface_load{1}.lc=1;     
     FEB_struct.Loads.Surface_load{1}.Set=elem_top;    
 
+elseif strcmp(bctype,'pressure') && strcmp(mat,'rigid body')  
+    
+    % pressure condition at top
+    FEB_struct.Loads.Surface_load{1}.Type='pressure';    
+    FEB_struct.Loads.Surface_load{1}.lcPar='pressure';
+    FEB_struct.Loads.Surface_load{1}.lcParValue=pressureMagnitude;
+    FEB_struct.Loads.Surface_load{1}.lc=1;     
+    FEB_struct.Loads.Surface_load{1}.Set=elem_top; 
+    
 end
 
+% adds constraints to DOFs
 if strcmp(mat,'rigid body') == 1
-    
-    % adds constraints to lower surface
+                
+    FEB_struct.Constraints{1}.RigidId = '1';    
     
     % DOF x
-    FEB_struct.Constraints{1}.RigidId = '1';    
-    FEB_struct.Constraints{1}.Fix{1}.bc='x';
-    %FEB_struct.Constraints{1}.Fix{1}.SetName=FEB_struct.Geometry.NodeSet{1}.Name;
-    FEB_struct.Constraints{1}.Fix{1}.Set=elem_bot;
-    
+    FEB_struct.Constraints{1}.Fix{1}.bc='x';        
+
     % DOF y
     FEB_struct.Constraints{1}.Fix{2}.bc='y';
-    %FEB_struct.Constraints{1}.Fix{2}.SetName=FEB_struct.Geometry.NodeSet{1}.Name;
-    FEB_struct.Constraints{1}.Fix{2}.Set=elem_bot;
     
     % DOF z
-    FEB_struct.Constraints{1}.Fix{3}.bc='z';
-    %FEB_struct.Constraints{1}.Fix{3}.SetName=FEB_struct.Geometry.NodeSet{1}.Name;
-    FEB_struct.Constraints{1}.Fix{3}.Set=elem_bot;
-    
+    FEB_struct.Constraints{1}.Prescribe{1}.bc='z';
+    FEB_struct.Constraints{1}.Prescribe{1}.lc=1;
+    FEB_struct.Constraints{1}.Prescribe{1}.Scale=displacementMagnitude(3);
+                 
     % DOF rotation x
-    FEB_struct.Constraints{1}.Fix{4}.bc='Rx';
-    %FEB_struct.Constraints{1}.Fix{4}.SetName=FEB_struct.Geometry.NodeSet{1}.Name;
-    FEB_struct.Constraints{1}.Fix{4}.Set=elem_bot;
+    FEB_struct.Constraints{1}.Fix{3}.bc='Rx';    
     
     % DOF rotation y
-    FEB_struct.Constraints{1}.Fix{5}.bc='Ry';
-    %FEB_struct.Constraints{1}.Fix{5}.SetName=FEB_struct.Geometry.NodeSet{1}.Name;
-    FEB_struct.Constraints{1}.Fix{5}.Set=elem_bot;
+    FEB_struct.Constraints{1}.Fix{4}.bc='Ry';    
     
     % DOF rotation z
-    FEB_struct.Constraints{1}.Fix{6}.bc='Rz';
-    %FEB_struct.Constraints{1}.Fix{6}.SetName=FEB_struct.Geometry.NodeSet{1}.Name;    
-    FEB_struct.Constraints{1}.Fix{6}.Set=elem_bot;
+    FEB_struct.Constraints{1}.Fix{5}.bc='Rz';
+    
 end
 
 %Load curves 
@@ -471,10 +485,15 @@ end
 FEB_struct.LoadData.LoadCurves.id=1;
 FEB_struct.LoadData.LoadCurves.type={'linear'};
 
-if strcmp(bctype,'displacement')   
+if strcmp(bctype,'displacement') && ~strcmp(mat,'rigid body')  
     FEB_struct.LoadData.LoadCurves.loadPoints={[0 0;1 -1;]};
 end
-if strcmp(bctype,'pressure')   
+
+if strcmp(bctype,'displacement') && strcmp(mat,'rigid body')  
+    FEB_struct.LoadData.LoadCurves.loadPoints={[0 0;1 1;]};
+end
+
+if strcmp(bctype,'pressure')
     FEB_struct.LoadData.LoadCurves.loadPoints={[0 0;1 1;]};
 end
 
@@ -483,7 +502,13 @@ end
 FEB_struct.Output.VarTypes={'displacement', 'relative volume','shell thickness',...
     'stress','reaction forces'};
 
-%Specify log file output
+%{
+Specify log file output
+    This element is ignored after exporting the model out from Preview.
+    To track the quantities, it needs to be reappended to the .feb file
+    in order to generate the data.
+    
+%}    
 run_node_output_name=[FEB_struct.run_filename(1:end-4),'_node_out.txt'];
 FEB_struct.run_output_names={run_node_output_name};
 FEB_struct.output_types={'node_data'};
