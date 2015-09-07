@@ -93,16 +93,15 @@ disp('==== MESH BONE MARROW ====')
 
 %% IMAGE DIRECTORY
 
-fmt = 'jpg';
+fmt = 'jpg'; % image format 
+sample = 'z265'; % sample (image sequence)
 
-if strcmp(fmt,'jpg') == 1    
-    bdir = fullfile(img_dir,'/jpg/z269');    
-    ls_dir = dir( fullfile(bdir,'*.jpg'));
-end
+ls_dir = dir( fullfile( img_dir,fmt,sample,strcat('*.',fmt) ) );        
 
 %% SAVING
 % output MSH
 svmsh = fullfile(save_dir,'/msh');
+opsvmsh = false; % optional to save msh
 
 % output FEB
 modelName=fullfile(feb_dir,'marrowCompression');
@@ -466,7 +465,9 @@ Failed finding EndElements.
 It's necessary to open the mesh in Gmsh and save it again in case of 
 importing it into PreView.
 %}
-savemsh(node,elem, fullfile(svmsh,'marrow.msh'), {'marrow'});
+if opsvmsh
+    savemsh(node,elem, fullfile(svmsh,'marrow.msh'), {'marrow'});
+end
 
 %% CONSTRUCTING FEB MODEL (from Gibbon code example)
 

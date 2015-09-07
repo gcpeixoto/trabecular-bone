@@ -93,16 +93,15 @@ disp('==== MESH TRABECULAR BONE ====')
 
 %% IMAGE DIRECTORY
 
-fmt = 'jpg';
+fmt = 'jpg'; % image format 
+sample = 'z265'; % sample (image sequence)
 
-if strcmp(fmt,'jpg') == 1    
-    bdir = fullfile(img_dir,'/jpg/z269');    
-    ls_dir = dir( fullfile(bdir,'*.jpg'));
-end
+ls_dir = dir( fullfile( img_dir,fmt,sample,strcat('*.',fmt) ) );        
 
 %% SAVING
 % output MSH
 svmsh = fullfile(save_dir,'/msh');
+opsvmsh = false; % optional to save msh
 
 % output FEB
 modelName=fullfile(feb_dir,'boneCompression');
@@ -114,7 +113,7 @@ out = fullfile(pwd,'../dat/bone');
 %% PARAMETER SETTINGS
 
 iter = 1; % number of iterations for mesh smoothing operation
-nimg = 40; % number of images to parse
+nimg = 5; % number of images to parse
 maxgap = 3; % maximum gap size for image fill holes 
 
 % image smoothing
@@ -466,8 +465,9 @@ Failed finding EndElements.
 It's necessary to open the mesh in Gmsh and save it again in case of 
 importing it into PreView.
 %}
-savemsh(node,elem, fullfile(svmsh,'trabecula.msh'), {'trabecula'});
-
+if opsvmsh
+    savemsh(node,elem, fullfile(svmsh,'trabecula.msh'), {'trabecula'});
+end
 %% CONSTRUCTING FEB MODEL (from Gibbon code example)
 
 FEB_struct.febio_spec.version='2.0';
