@@ -84,6 +84,9 @@ addpath( genpath(i2m_path), genpath(gib_path), fullfile(pwd,'../lib'), genpath(i
 delete( fullfile(feb_dir,'/*.*') );
 delete( fullfile(feb_dir,'/sim/*.*') );
 
+% executable FEbio path 
+FEBIO_PATH = '/Applications/FEBio2.2.6/bin/FEBio2';
+
 %% DIARY
 % creating and enabling diary
 diary( fullfile(save_dir,'meshTrabecularBoneLog.txt') );
@@ -113,7 +116,7 @@ out = fullfile(pwd,'../dat/bone');
 %% PARAMETER SETTINGS
 
 iter = 1; % number of iterations for mesh smoothing operation
-nimg = 5; % number of images to parse
+nimg = 20; % number of images to parse
 maxgap = 3; % maximum gap size for image fill holes 
 
 % image smoothing
@@ -152,9 +155,9 @@ dpz = -1.0;
 bctype = 'displacement';
 
 % material choice
-mat = 'rigid body'; % not OK with constraint imposition
+%mat = 'rigid body'; % not OK with constraint imposition
 %mat = 'Mooney-Rivlin';
-%mat = 'neo-Hookean'; % keep as default, although used for cartilage
+mat = 'neo-Hookean'; % keep as default, although used for cartilage
 
 % plotting
 viewAz = 65;
@@ -186,7 +189,7 @@ See Section 3.5.1 of Febio Manual for default values
 
 ntime = 100; % number of iterations 
 dt = 0.1; % initial time step
-max_refs = 25; % max number of stiffness reformations (recalculation and factorization)
+max_refs = 35; % max number of stiffness reformations (recalculation and factorization)
 max_ups = 0; % max number of BFGS stiffness updates;
 dtol = 0.001; % convergence tolerance on displacements
 etol = 0.01; % convergence tolerance on energy
@@ -211,17 +214,7 @@ elseif strcmp(mat,'neo-Hookean');
     fprintf('----> Running for material: neo-Hookean.\n');
     E = 1e+9; % Young modulus
     nu = 0.3; % Poisson' ratio
-
-elseif strcmp(mat,'rigid body');
-    fprintf('----> Running for material: rigid body.\n');        
-    % If the center_of_mass parameter is 
-    % omitted, FEBio will calculate the center of mass automatically. 
-    % In this case, a density must be specified. If the center_of_mass 
-    % is defined the density parameter may be omitted. 
-    % Omitting both will generate an error message.
-    rho = 1030;     
-    E = 1e+9; % Young modulus
-    nu = 0.3; % Poisson' ratio    
+    
 else
     error('Model of material not specified. Stopping...');
 end
@@ -358,17 +351,25 @@ opt.angbound = ang;
 %opt.distbound = dist;
 [node,elem,face] = v2m(vimg,isovalue,opt,maxvoltet,method);
 
+
+
 %{ 
   mesh reorientation
-  This method is not producing the optimum effect. 
-  Even if reorient 'elem', 'face', or both, the mesh is not being corrected.
-  Call none of them produces the smallest number of no oriented elements
-  in Febio output. Calling 'Invert' in PreView is still required. 
-  I don't know why...
-%} 
+  First call of 'meshreorient': correct mesh and set all element's volume > 0
+  Second call of 'meshreorient': bring all to volume < 0
+    
+  This procedure is necessary for Febio in order to avoid 
+  'Negative Jacobian' messages, since it follows another orientation.
 
-%elem(:,1:4) = meshreorient(node(:,1:3),elem(:,1:4));
-%face(:,1:3) = meshreorient(node(:,1:3),face(:,1:3));
+  It's how it worked.
+  
+%} 
+% reorients to have all elements with volume > 0
+elem(:,1:4) = meshreorient(node(:,1:3),elem(:,1:4)); 
+% invert again to have all elements with volume < 0
+vol=elemvolume(node(:,1:3),elem(:,1:4),'signed');
+idx=find(vol>0);
+elem(idx,[end-2,end-1])=elem(idx,[end-1,end-2]); % displaces -1
 
 %% VERIFICATION PLOTS
 
@@ -490,7 +491,7 @@ FEB_struct.Geometry.ElementsPartName={'Trabeculae'};
 %Defining surfaces
 FEB_struct.Geometry.Surface{1}.Set=elem_top;
 FEB_struct.Geometry.Surface{1}.Type='tri3';
-FEB_struct.Geometry.Surface{1}.Name='Pressure_surface';
+FEB_struct.Geometry.Surface{1}.Name='Top_surface';
 
 
 % DEFINING MATERIAL CONSTITUTIVE RELATION
@@ -505,12 +506,6 @@ elseif strcmp(mat,'neo-Hookean')
     FEB_struct.Materials{1}.Name='bone';
     FEB_struct.Materials{1}.Properties={'E','v'};
     FEB_struct.Materials{1}.Values={E,nu};
-
-elseif strcmp(mat,'rigid body')
-    FEB_struct.Materials{1}.Type='rigid body';
-    FEB_struct.Materials{1}.Name='bone';
-    FEB_struct.Materials{1}.Properties={'density','E','v'};
-    FEB_struct.Materials{1}.Values={rho,E,nu};        
     
 else
     error('Model of material not specified. Stopping...');
@@ -556,27 +551,8 @@ if strcmp(bctype,'displacement') && ~strcmp(mat,'rigid body')
     FEB_struct.Boundary.Fix{3}.bc='z';
     FEB_struct.Boundary.Fix{3}.SetName=FEB_struct.Geometry.NodeSet{1}.Name;   
     
-
-elseif strcmp(bctype,'displacement') && strcmp(mat,'rigid body')
-            
-    % fixing at bottom x 
-    FEB_struct.Boundary.Fix{1}.bc='x';
-    FEB_struct.Boundary.Fix{1}.SetName=FEB_struct.Geometry.NodeSet{1}.Name;
-        
-    % fixing at bottom y 
-    FEB_struct.Boundary.Fix{2}.bc='y';
-    FEB_struct.Boundary.Fix{2}.SetName=FEB_struct.Geometry.NodeSet{1}.Name;
-        
-    % fixing at bottom z 
-    FEB_struct.Boundary.Fix{3}.bc='z';
-    FEB_struct.Boundary.Fix{3}.SetName=FEB_struct.Geometry.NodeSet{1}.Name;
-    
-    % prescribing at top z 
-    %FEB_struct.Boundary.Prescribe{1}.bc='z';
-    %FEB_struct.Boundary.Prescribe{1}.SetName=FEB_struct.Geometry.NodeSet{2}.Name;
-
 % Pressure loading
-elseif strcmp(bctype,'pressure') && ~strcmp(mat,'rigid body')  
+elseif strcmp(bctype,'pressure')  
     disp('----> Running bctype: pressure.')
             
     % zero displacement at bottom
@@ -595,42 +571,6 @@ elseif strcmp(bctype,'pressure') && ~strcmp(mat,'rigid body')
     FEB_struct.Loads.Surface_load{1}.lcParValue=pressureMagnitude;
     FEB_struct.Loads.Surface_load{1}.lc=1;     
     FEB_struct.Loads.Surface_load{1}.Set=elem_top;    
-
-elseif strcmp(bctype,'pressure') && strcmp(mat,'rigid body')  
-    
-    % pressure condition at top
-    FEB_struct.Loads.Surface_load{1}.Type='pressure';    
-    FEB_struct.Loads.Surface_load{1}.lcPar='pressure';
-    FEB_struct.Loads.Surface_load{1}.lcParValue=pressureMagnitude;
-    FEB_struct.Loads.Surface_load{1}.lc=1;     
-    FEB_struct.Loads.Surface_load{1}.Set=elem_top; 
-    
-end
-
-% adds constraints to DOFs
-if strcmp(mat,'rigid body') == 1
-                
-    FEB_struct.Constraints{1}.RigidId = '1';    
-    
-    % DOF x
-    FEB_struct.Constraints{1}.Fix{1}.bc='x';        
-
-    % DOF y
-    FEB_struct.Constraints{1}.Fix{2}.bc='y';
-    
-    % DOF z
-    FEB_struct.Constraints{1}.Prescribe{1}.bc='z';
-    FEB_struct.Constraints{1}.Prescribe{1}.lc=1;
-    FEB_struct.Constraints{1}.Prescribe{1}.Scale=displacementMagnitude(3);
-                 
-    % DOF rotation x
-    FEB_struct.Constraints{1}.Fix{3}.bc='Rx';    
-    
-    % DOF rotation y
-    FEB_struct.Constraints{1}.Fix{4}.bc='Ry';    
-    
-    % DOF rotation z
-    FEB_struct.Constraints{1}.Fix{5}.bc='Rz';
     
 end
 
@@ -640,12 +580,8 @@ end
 FEB_struct.LoadData.LoadCurves.id=1;
 FEB_struct.LoadData.LoadCurves.type={'linear'};
 
-if strcmp(bctype,'displacement') && ~strcmp(mat,'rigid body')  
-    FEB_struct.LoadData.LoadCurves.loadPoints={[0 0;1 -1;]};
-end
-
-if strcmp(bctype,'displacement') && strcmp(mat,'rigid body')  
-    FEB_struct.LoadData.LoadCurves.loadPoints={[0 0;1 1;]};
+if strcmp(bctype,'displacement')
+    FEB_struct.LoadData.LoadCurves.loadPoints={[0 0;1 1;]}; % (1,1) because orientation was changed
 end
 
 if strcmp(bctype,'pressure')
@@ -681,5 +617,19 @@ save_area_info( fullfile(out,'areasTrabeculae.dat'), As, effective_area, ...
 
 % close diary
 diary off
+
+%% RUN FEBIO 
+
+FEBioRunStruct.run_filename=FEB_struct.run_filename;
+FEBioRunStruct.run_logname=FEB_struct.run_logname;
+FEBioRunStruct.disp_on=1;
+FEBioRunStruct.disp_log_on=1;
+FEBioRunStruct.FEBioPath=FEBIO_PATH; 
+FEBioRunStruct.runMode='internal'; % 'internal': run inside Matlab
+FEBioRunStruct.t_check=0.25; % Time for checking log file (dont set too small)
+FEBioRunStruct.maxtpi=1e99; % Max analysis time
+FEBioRunStruct.maxLogCheckTime=3; % Max log file checking time
+
+[runFlag]=runMonitorFEBio(FEBioRunStruct); % run FEBIO
 
 
