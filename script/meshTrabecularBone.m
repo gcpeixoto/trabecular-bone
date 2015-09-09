@@ -77,12 +77,12 @@ gib_path = 'Users/gustavo/Programs/gibbon';
 img_dir = fullfile(pwd,'../img');
 save_dir = fullfile(pwd,'../save');
 feb_dir = fullfile(pwd,'../febio/bone');
+py_dir = fullfile(pwd,'../py/');
 
 addpath( genpath(i2m_path), genpath(gib_path), fullfile(pwd,'../lib'), genpath(img_dir));
 
 % deletes old files
 delete( fullfile(feb_dir,'/*.*') );
-delete( fullfile(feb_dir,'/sim/*.*') );
 
 % executable FEbio path 
 FEBIO_PATH = '/Applications/FEBio2.2.6/bin/FEBio2';
@@ -116,7 +116,7 @@ out = fullfile(pwd,'../dat/bone');
 %% PARAMETER SETTINGS
 
 iter = 1; % number of iterations for mesh smoothing operation
-nimg = 20; % number of images to parse
+nimg = 10; % number of images to parse
 maxgap = 3; % maximum gap size for image fill holes 
 
 % image smoothing
@@ -143,19 +143,21 @@ ang = 30;           % miminum angle of a surface triangle
 dist = 1;           % maximum distance between the center of the surface 
                     % bounding circle and center of the element bounding sphere
 
+                                       
 % b.c. setting
-top_tol = 0.5;
-bot_tol = 0.5;
-dpx = 0.0;
+top_tol = 0.4; % top surface tolerance  
+bot_tol = 0.4; % bottom surface tolerance
+% displacement scale
+dpx = 0.0; 
 dpy = 0.0;
 dpz = -1.0;
+k = 0.1; % percentage of strain
 
 % how the boundary condition will be applied
 %bctype = 'pressure';
 bctype = 'displacement';
 
 % material choice
-%mat = 'rigid body'; % not OK with constraint imposition
 %mat = 'Mooney-Rivlin';
 mat = 'neo-Hookean'; % keep as default, although used for cartilage
 
@@ -188,11 +190,11 @@ See Section 3.5.1 of Febio Manual for default values
 %}
 
 ntime = 100; % number of iterations 
-dt = 0.1; % initial time step
-max_refs = 35; % max number of stiffness reformations (recalculation and factorization)
-max_ups = 0; % max number of BFGS stiffness updates;
-dtol = 0.001; % convergence tolerance on displacements
-etol = 0.01; % convergence tolerance on energy
+dt = 0.01; % initial time step
+max_refs = 15; % max number of stiffness reformations (recalculation and factorization)
+max_ups = 10; % max number of BFGS stiffness updates;
+dtol = 1.0e-3; % convergence tolerance on displacements
+etol = 1.0e-1; % convergence tolerance on energy
 rtol = 0; % convergence tolerance on residual 
 lstol = 0.9; % convergence tolerance on line search
 
@@ -250,6 +252,7 @@ vimg = uint8( vimg ); % convert from 'logical' to 'uint8'
 % 1.9: volumetric image processing
 
 vimg = fillholes3d(vimg,maxgap);
+
 
 %% TETRAHEDRAL MESH GENERATION
 
@@ -450,10 +453,15 @@ if dpz > 0
     warning('z-displacement B.C. magnitude was inverted from %f to %f ',dpz,-dpz);
     dpz = - dpz;    
 end
+
+if k ~= 0.0
+    dpz = - k*abs(zmax - zmin);
+end
 displacementMagnitude=[dpx dpy dpz];
 
 % Define pressure magnitude
 % (?) check if this is the real value wanted
+%pressureMagnitude = dpz;
 pressureMagnitude = 1.0;
 
 %% MSH saving
@@ -493,6 +501,11 @@ FEB_struct.Geometry.Surface{1}.Set=elem_top;
 FEB_struct.Geometry.Surface{1}.Type='tri3';
 FEB_struct.Geometry.Surface{1}.Name='Top_surface';
 
+FEB_struct.Geometry.Surface{2}.Set=elem_bot;
+FEB_struct.Geometry.Surface{2}.Type='tri3';
+FEB_struct.Geometry.Surface{2}.Name='Bot_surface';
+
+
 
 % DEFINING MATERIAL CONSTITUTIVE RELATION
 if strcmp(mat,'Mooney-Rivlin')
@@ -528,7 +541,7 @@ FEB_struct.Geometry.NodeSet{1}.Name='fixedBC';
 FEB_struct.Geometry.NodeSet{2}.Set=z_top;
 FEB_struct.Geometry.NodeSet{2}.Name='prescribedBC';
    
-if strcmp(bctype,'displacement') && ~strcmp(mat,'rigid body')
+if strcmp(bctype,'displacement')
     
     disp('----> Running bctype: displacement.')
            
@@ -542,14 +555,28 @@ if strcmp(bctype,'displacement') && ~strcmp(mat,'rigid body')
     % fixing at bottom x 
     FEB_struct.Boundary.Fix{1}.bc='x';
     FEB_struct.Boundary.Fix{1}.SetName=FEB_struct.Geometry.NodeSet{1}.Name;
+    
         
     % fixing at bottom y 
     FEB_struct.Boundary.Fix{2}.bc='y';
     FEB_struct.Boundary.Fix{2}.SetName=FEB_struct.Geometry.NodeSet{1}.Name;
+    
         
     % fixing at bottom z 
     FEB_struct.Boundary.Fix{3}.bc='z';
     FEB_struct.Boundary.Fix{3}.SetName=FEB_struct.Geometry.NodeSet{1}.Name;   
+    
+    %{ 
+        This is a trick provided by S. Maas @MRL Utah.  
+        Applying a 0 pressure doesn't affect the results
+        and allows the selection of the surface in PostView. 
+        Then, the displacement formulation is the way to go.
+    %}
+    FEB_struct.Loads.Surface_load{1}.Type='pressure';    
+    FEB_struct.Loads.Surface_load{1}.lcPar='pressure';
+    FEB_struct.Loads.Surface_load{1}.lcParValue=0.0;
+    FEB_struct.Loads.Surface_load{1}.lc=1;     
+    FEB_struct.Loads.Surface_load{1}.Set=elem_top; 
     
 % Pressure loading
 elseif strcmp(bctype,'pressure')  
@@ -557,13 +584,16 @@ elseif strcmp(bctype,'pressure')
             
     % zero displacement at bottom
     FEB_struct.Boundary.Fix{1}.bc='x';
-    FEB_struct.Boundary.Fix{1}.SetName=FEB_struct.Geometry.NodeSet{1}.Name;
+    %FEB_struct.Boundary.Fix{1}.SetName=FEB_struct.Geometry.NodeSet{1}.Name;
+    FEB_struct.Boundary.Fix{1}.Set=elem_bot;
 
     FEB_struct.Boundary.Fix{2}.bc='y';
-    FEB_struct.Boundary.Fix{2}.SetName=FEB_struct.Geometry.NodeSet{1}.Name;
+    %FEB_struct.Boundary.Fix{2}.SetName=FEB_struct.Geometry.NodeSet{1}.Name;
+    FEB_struct.Boundary.Fix{2}.Set=elem_bot;
 
     FEB_struct.Boundary.Fix{3}.bc='z';
-    FEB_struct.Boundary.Fix{3}.SetName=FEB_struct.Geometry.NodeSet{1}.Name;        
+    %FEB_struct.Boundary.Fix{3}.SetName=FEB_struct.Geometry.NodeSet{1}.Name;        
+    FEB_struct.Boundary.Fix{3}.Set=elem_bot;
             
     % pressure condition at top
     FEB_struct.Loads.Surface_load{1}.Type='pressure';    
@@ -631,5 +661,4 @@ FEBioRunStruct.maxtpi=1e99; % Max analysis time
 FEBioRunStruct.maxLogCheckTime=3; % Max log file checking time
 
 [runFlag]=runMonitorFEBio(FEBioRunStruct); % run FEBIO
-
 
