@@ -71,14 +71,14 @@ disp('==== MESH REV BONE - MULTIREGION ====')
 %% IMAGE DIRECTORY
 
 fmt = 'jpg'; % image format 
-sample = 'z265'; % sample (image sequence)
+sample = 'z269'; % sample (image sequence)
 
 ls_dir = dir( fullfile( img_dir,fmt,sample,strcat('*.',fmt) ) );        
 
 %% SAVING
 % output MSH
 svmsh = fullfile(save_dir,'/msh');
-opsvmsh = false; % optional to save msh
+opsvmsh = true; % optional to save msh
 
 % output FEB
 modelName=fullfile(feb_dir,'boneMultiregion');
@@ -89,7 +89,7 @@ out = fullfile(pwd,'../dat/rev');
 %% PARAMETER SETTINGS
 
 iter = 1; % number of iterations for mesh smoothing operation
-nimg = 5; % number of images to parse
+nimg = 240; % number of images to parse
 maxgap = 3; % maximum gap size for image fill holes 
 sizelim = 5; % integer as the maximum pixel size of a isolated region
 filterval = 1.5;

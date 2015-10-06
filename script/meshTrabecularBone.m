@@ -97,14 +97,14 @@ disp('==== MESH TRABECULAR BONE ====')
 %% IMAGE DIRECTORY
 
 fmt = 'jpg'; % image format 
-sample = 'z265'; % sample (image sequence)
+sample = 'z269'; % sample (image sequence)
 
 ls_dir = dir( fullfile( img_dir,fmt,sample,strcat('*.',fmt) ) );        
 
 %% SAVING
 % output MSH
 svmsh = fullfile(save_dir,'/msh');
-opsvmsh = false; % optional to save msh
+opsvmsh = true; % optional to save msh
 
 % output FEB
 modelName=fullfile(feb_dir,'boneCompression');
@@ -116,7 +116,7 @@ out = fullfile(pwd,'../dat/bone');
 %% PARAMETER SETTINGS
 
 iter = 1; % number of iterations for mesh smoothing operation
-nimg = 10; % number of images to parse
+nimg = 240; % number of images to parse
 maxgap = 3; % maximum gap size for image fill holes 
 
 % image smoothing
@@ -145,13 +145,21 @@ dist = 1;           % maximum distance between the center of the surface
 
                                        
 % b.c. setting
-top_tol = 0.4; % top surface tolerance  
-bot_tol = 0.4; % bottom surface tolerance
+top_tol = 0.2; % top surface tolerance  
+bot_tol = 0.2; % bottom surface tolerance
+
+% forcing of bounding box is used inside 'cgalv2m.m' (not a good thing)
+%forcebbox = 'n';
+%global BBOX_BOT_TOL;
+%global BBOX_TOP_TOL;
+%BBOX_TOP_TOL = top_tol;
+%BBOX_BOT_TOL = bot_tol;
+
 % displacement scale
 dpx = 0.0; 
 dpy = 0.0;
 dpz = -1.0;
-k = 0.1; % percentage of strain
+k = 0.01; % percentage of strain
 
 % how the boundary condition will be applied
 %bctype = 'pressure';
@@ -276,7 +284,7 @@ vimg = fillholes3d(vimg,maxgap);
     ----------------------------------------------------------------------
     |-> ABOUT .INR format:
 
-        Developped at INRIA. 
+        Developed at INRIA. 
         Contains header of 256 characters followed by the image raw data:         
             - the image dimensions 
             - number of values per pixel (or voxel) 
@@ -443,8 +451,8 @@ ratios_area = [ top_area/As bot_area/As max_sec_area/min_sec_area ];
 %% FIND AND SET BCs
 
 % extrema nodes
-[z_top,zmax] = find_nodes( node, top_tol, '+z');
-[z_bot,zmin] = find_nodes( node, bot_tol, '-z');
+[z_top,zmax] = find_nodes( node, top_tol, '+z' );
+[z_bot,zmin] = find_nodes( node, bot_tol, '-z' );
 
 % Define displacement magnitude scale
 % (?) It seems that the choice of direction (+ or -) has no effect
@@ -461,7 +469,6 @@ displacementMagnitude=[dpx dpy dpz];
 
 % Define pressure magnitude
 % (?) check if this is the real value wanted
-%pressureMagnitude = dpz;
 pressureMagnitude = 1.0;
 
 %% MSH saving
