@@ -97,7 +97,7 @@ disp('==== MESH TRABECULAR BONE ====')
 %% IMAGE DIRECTORY
 
 fmt = 'jpg'; % image format 
-sample = 'z269'; % sample (image sequence)
+sample = 'z265'; % sample (image sequence)
 
 ls_dir = dir( fullfile( img_dir,fmt,sample,strcat('*.',fmt) ) );        
 
@@ -116,7 +116,7 @@ out = fullfile(pwd,'../dat/bone');
 %% PARAMETER SETTINGS
 
 iter = 1; % number of iterations for mesh smoothing operation
-nimg = 240; % number of images to parse
+nimg = 40; % number of images to parse
 maxgap = 3; % maximum gap size for image fill holes 
 
 % image smoothing
@@ -669,3 +669,6 @@ FEBioRunStruct.maxLogCheckTime=3; % Max log file checking time
 
 [runFlag]=runMonitorFEBio(FEBioRunStruct); % run FEBIO
 
+% converts Febio .xplt files to .vtk
+disp('----> Saving .vtk files into ../febio/bone.')
+!/usr/local/bin/python ../py/convert_feb_vtk.py ../febio/bone/ boneCompression.xplt 20 ../febio/bone/
