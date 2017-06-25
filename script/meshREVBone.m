@@ -71,7 +71,7 @@ disp('==== MESH REV BONE - MULTIREGION ====')
 %% IMAGE DIRECTORY
 
 fmt = 'jpg'; % image format 
-sample = 'z269'; % sample (image sequence)
+sample = 'z265'; % sample (image sequence)
 
 ls_dir = dir( fullfile( img_dir,fmt,sample,strcat('*.',fmt) ) );        
 
@@ -79,6 +79,7 @@ ls_dir = dir( fullfile( img_dir,fmt,sample,strcat('*.',fmt) ) );
 % output MSH
 svmsh = fullfile(save_dir,'/msh');
 opsvmsh = true; % optional to save msh
+opsvstl = false;
 
 % output FEB
 modelName=fullfile(feb_dir,'boneMultiregion');
@@ -87,13 +88,6 @@ modelName=fullfile(feb_dir,'boneMultiregion');
 out = fullfile(pwd,'../dat/rev');
 
 %% PARAMETER SETTINGS
-
-iter = 1; % number of iterations for mesh smoothing operation
-nimg = 240; % number of images to parse
-maxgap = 3; % maximum gap size for image fill holes 
-sizelim = 5; % integer as the maximum pixel size of a isolated region
-filterval = 1.5;
-prep = 'n'; % pre-processing methods
 
 % volumetric mesh adjust
 %{
@@ -107,31 +101,14 @@ prep = 'n'; % pre-processing methods
     Why?
     
 %}
+
+nimg = 5; % number of images to parse
 method = 'cgalmesh';% meshing method;
 isovalue = [];      % level-set value \phi; understand the formation law
-maxvoltet = 100;    % tetrahedra volume; unit^3: pixel, voxel??
-rad = 100;          % Delaunay's sphere radius
+rad = 3;           % Delaunay's sphere radius (triangle maximum size)
 ang = 30;           % miminum angle of a surface triangle
-%rer = 0.7;          % maximum radius-edge ratio
-dist = 1;           % maximum distance between the center of the surface 
-                    % bounding circle and center of the element bounding sphere
-
-% b.c. setting
-top_tol = 0.5;
-bot_tol = 0.5;
-dpx = 0.0;
-dpy = 0.0;
-dpz = -1.0;
-
-% how the boundary condition will be applied
-%bctype = 'pressure';
-bctype = 'displacement';
-
-
-% plotting
-viewAz = 65;
-vieEl = 25;
-plt = 'y'; % 'n' plot bone structure?
+rer = 0.612;       % maximum radius-edge ratio
+dist = 0.5;         % maximum deviation from specified isosurfaces 
 
 %% IMAGE PROCESSING
 
@@ -139,55 +116,100 @@ n = size(ls_dir,1);
 im = imread(ls_dir(1).name);
 vimg = zeros( size(im,1), size(im,2), nimg ); % allocating image array
 
+afilt = true;
+sigma = 0.5;
+kexp = 0.3;
+szel = 3;
 for i = 1:nimg
-    if (nimg > n); error('Number of images to load exceeded!'); end;
-    % read and convert
-    im = imread( ls_dir(i).name );          
-        
-    % thresholding       
-    im = rgb2gray(im); % convert to gray
-    level = multithresh(im); % determining regions
-    im = imquantize(im,level);
     
-    vimg(:,:,i) = im;        
+    if (nimg > n); error('Number of images to load exceeded!'); end;
         
-    % 1.9: volumetric image processing
-    switch prep
-        case 'di' 
-            % remove isolated regions: maybe not useful for trabeculae
-            vimg(:,:,i) = deislands3d(vimg(:,:,i),sizelim);               
-        case 'sm'
-            % perform a memory-limited 3D image smoothing
-            vimg(:,:,i) = smoothbinvol(vimg(:,:,i),iter);                
-        case 'mf'
-            % apply mean filter
-            vimg(:,:,i) = apply_mean_filter(vimg(:,:,i),filterval);    
+    im = imread( ls_dir(i).name );    % read         
+    im = rgb2gray(im);                % convert to gray
+    
+    if afilt                     
+        % see filter types
+        ftg = fspecial('gaussian',szel,sigma);         
+        ft = kexp*ones(szel,szel);        
+        imft = imfilter(im,ft);               % filtered image                                  
+        imftg = imfilter(im,ftg);               % filtered image   
+        
+        %figure
+        %subplot(1,3,1), subimage(im)
+        %subplot(1,3,2), subimage(imft)
+        %subplot(1,3,3), subimage(imftg)
+        %imshowpair(im,imft,'montage')         % original,filtered
+        %close all
     end
+    
+    level = multithresh(im);          % threshold    
+    im = imquantize(im,level);        % determine region labels 
+            
+    vimg(:,:,i) = im;                 % image with 1,2       
+    
+    level2 = multithresh(imft);          
+    imft = imquantize(imft,level2);      
+    vimgft(:,:,i) = imft;                
+    
 end
 
 vimg = uint8( vimg ); % convert from 'logical' to 'uint8'
-
-%% FILL HOLES
-% 1.9: volumetric image processing
-
-vimg = fillholes3d(vimg,maxgap);
+vimgft = uint8( vimgft );
 
 %% TETRAHEDRAL MESH GENERATION
 
 % mesher and options 
 opt.radbound = rad;
 opt.angbound = ang;
-%opt.reratio = rer; % error, if enabled
-%opt.distbound = dist;
-[node,elem,face] = v2m(vimg,isovalue,opt,maxvoltet,method);
+opt.reratio = rer; 
+opt.distbound = dist;
+
+maxvol1 = 1;
+maxvol2 = 1;
+maxvol = strcat('1=',num2str(maxvol1),':2=',num2str(maxvol2)); % 'label1=size1:label2:size2'
+dofix = 1;
+ix = 1:size(vimg,1);
+iy = 1:size(vimg,2);
+iz = 1:size(vimg,3);
+
+[node,elem,face] = vol2mesh(vimg,ix,iy,iz,opt,maxvol,dofix,method);
+[node2,elem2,face2] = vol2mesh(vimgft,ix,iy,iz,opt,maxvol,dofix,method);
+
+% find the surface triangles 
+face11=volface(elem(elem(:,end)==1,1:4));  % bone
+face22=volface(elem(elem(:,end)==2,1:4));  % marrow
+facep=[face11;face22];
+
+% find the interface shared by the two surfaces
+[fc,count1,count2]=unique(sort(facep')','rows');  % find the duplicates
+bins=hist(count2,1:size(facep,1));        % the duplicated triangles are on the interface
+cc=bins(count2);
+
 
 % 1.6. Mesh processing and reparing
 % [node,elem] = meshcheckrepair(node_out,elem_out); % not good for binary
 
 %% Plot
-if strcmp(plt,'y')
+if strcmp(plt,'y')    
+    
     plotmesh(node,face)
+    %figure
+    %plotmesh(node,face11)
+    %figure
+    %plotmesh(node,face22)
+    %figure
+    %plotmesh(node(:,1:3),facep(cc==2,1:3))  % plot the interface
+    
+    figure
+    plotmesh(node2,face2)
+    
 end
+
+% [no,fc]=binsurface(vimg(1:10,1:10,1:10)==1);
+% plotmesh(no,fc);
+% figure
+% [no2,fc2]=binsurface(vimg(1:10,1:10,1:10)==2);
+% plotmesh(no2,fc2);
 
 %% MSH saving
 
@@ -197,4 +219,10 @@ importing it into PreView.
 %}
 if opsvmsh
     savemsh(node,elem, fullfile(svmsh,'boneREV.msh'), {'trabeculae','marrow'});
+    savemsh(node2,elem2, fullfile(svmsh,'boneREV2.msh'), {'trabeculae','marrow'});
+end
+
+if opsvstl    
+    savestl(node(:,1:3),elem(:,1:3), fullfile(svmsh,'boneREV.stl'), 'REV');
+    savestl(node2(:,1:3),elem2(:,1:4), fullfile(svmsh,'boneREV2.stl'), 'REV');
 end
